@@ -21,12 +21,19 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build IPA (no codesign)
+      - name: Build xcarchive (no codesign)
         run: flutter build ipa --no-codesign --release
+
+      - name: Package IPA from xcarchive
+        run: |
+          mkdir -p build/ios/ipa/Payload
+          cp -r "build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" build/ios/ipa/Payload/
+          cd build/ios/ipa && zip -r QingSpace.ipa Payload
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: QingSpace-iOS
-          path: build/ios/ipa/*.ipa
+          path: build/ios/ipa/QingSpace.ipa
           retention-days: 7
+          if-no-files-found: error

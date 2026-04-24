@@ -21,14 +21,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build xcarchive (no codesign)
-        run: flutter build ipa --no-codesign --release
+      - name: Build iOS app (no codesign)
+        run: flutter build ios --no-codesign --release
 
-      - name: Package IPA from xcarchive
+      - name: Package IPA
         run: |
           mkdir -p build/ios/ipa/Payload
-          ditto "build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app" "build/ios/ipa/Payload/Runner.app"
-          ditto -c -k --sequesterRsrc --keepParent "build/ios/ipa/Payload" "build/ios/ipa/QingSpace.ipa"
+          ditto build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent build/ios/ipa/Payload build/ios/ipa/QingSpace.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4

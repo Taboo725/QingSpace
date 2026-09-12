@@ -179,4 +179,4 @@ Please open an issue first to discuss significant changes.
 
 ## 📄 License
 
-[MIT](LICENSE). Bundled Source Han Serif CN is under the SIL Open Font License 1.1.
+[MIT](LICENSE). Bundled third-party assets are listed in [NOTICE](NOTICE) — Source Han Serif CN is under the SIL Open Font License 1.1.

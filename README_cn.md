@@ -103,4 +103,4 @@ QingSpace 没有自己的后端。Token 仅存于本地 SharedPreferences，
 
 ## 📄 许可证
 
-[MIT](LICENSE)。内置的思源宋体遵循 SIL Open Font License 1.1。
+[MIT](LICENSE)。内置第三方资源见 [NOTICE](NOTICE)，思源宋体遵循 SIL Open Font License 1.1。

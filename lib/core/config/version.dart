@@ -8,6 +8,11 @@ class AppVersion {
 
   static const List<ChangelogEntry> changelog = [
     ChangelogEntry(
+      version: '1.1.2',
+      date: '2026-09-12',
+      changes: ['Windows 新增安装包版本，可从「设置 > 应用」卸载；同时保留免安装压缩包'],
+    ),
+    ChangelogEntry(
       version: '1.1.1',
       date: '2026-09-12',
       changes: [

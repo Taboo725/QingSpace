@@ -4,6 +4,14 @@ All notable changes are recorded here. Versions follow [semantic
 versioning](https://semver.org/lang/zh-CN/); the section headings are what the
 release workflow copies into the GitHub Release body.
 
+## 1.1.2
+
+### 新增
+
+- **Windows 安装包**：新增 Inno Setup 安装程序（`-setup.exe`），默认按用户安装、
+  不弹 UAC，可从「设置 > 应用」正常卸载，卸载时保留本地配置。同时继续提供免安装的
+  zip 便携版，两者内容完全一致。安装器界面为简体中文。
+
 ## 1.1.1
 
 安装包瘦身：Android 从 106.9 MB 降到 30.1 MB，Windows 压缩包从 60.4 MB 降到 22.7 MB。

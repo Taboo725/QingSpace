@@ -27,10 +27,16 @@ Grab the latest build from the [**Releases**](https://github.com/Taboo725/QingSp
 |----------|------|-------|
 | Android (almost every phone) | `QingSpace-<version>-android-arm64-v8a.apk` | Sideload it; you will need to allow installs from unknown sources. |
 | Android (32-bit, pre-2015) | `QingSpace-<version>-android-armeabi-v7a.apk` | Only if the arm64 build refuses to install. |
-| Windows | `QingSpace-<version>-windows-x64.zip` | Unzip anywhere and run `qing_space.exe`. No installer. |
+| Windows (installer) | `QingSpace-<version>-windows-x64-setup.exe` | Recommended. No administrator rights needed; uninstall from Settings → Apps. |
+| Windows (portable) | `QingSpace-<version>-windows-x64.zip` | Unzip anywhere and run `qing_space.exe`. |
 
 Not sure which Android build? Take `arm64-v8a`. The in-app updater picks the
 right architecture on its own.
+
+The Windows installer and portable zip contain identical binaries. Both keep
+settings in `%APPDATA%`, so the "portable" build is install-free rather than
+fully self-contained — moving the folder to another machine will not carry your
+configuration with it.
 
 The app checks for updates once a day and can install them for you on Android.
 Turn it off in **Settings → About → 启动时自动检查**.

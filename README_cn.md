@@ -24,9 +24,13 @@
 |------|------|------|
 | Android（绝大多数手机） | `QingSpace-<版本>-android-arm64-v8a.apk` | 直接安装，需允许「安装未知来源应用」 |
 | Android（2015 年前的 32 位机型） | `QingSpace-<版本>-android-armeabi-v7a.apk` | 仅当 arm64 版装不上时使用 |
-| Windows | `QingSpace-<版本>-windows-x64.zip` | 解压到任意目录后运行 `qing_space.exe`，无需安装 |
+| Windows 安装版 | `QingSpace-<版本>-windows-x64-setup.exe` | 推荐。无需管理员权限，可从「设置 > 应用」卸载 |
+| Windows 便携版 | `QingSpace-<版本>-windows-x64.zip` | 解压到任意目录后运行 `qing_space.exe` |
 
 不确定选哪个就装 `arm64-v8a`，应用内更新会自动挑对应架构。
+
+Windows 安装版与便携版内容完全相同。两者的配置都存放在 `%APPDATA%`，
+所以便携版只是「免安装」而非「绿色版」—— 把目录复制到另一台电脑不会带走设置。
 
 应用每天最多检查一次更新。Android 可在应用内直接下载安装；Windows 会提示并跳转到下载页面。
 可在 **设置 → 关于 → 启动时自动检查** 中关闭。

@@ -94,13 +94,43 @@ reason.
    ```
 
 5. **Watch the run.** On success the release appears at
-   `https://github.com/Taboo725/QingSpace/releases` with two assets:
+   `https://github.com/Taboo725/QingSpace/releases` with four assets:
 
-   - `QingSpace-<version>-android.apk`
-   - `QingSpace-<version>-windows-x64.zip`
+   - `QingSpace-<version>-android-arm64-v8a.apk`
+   - `QingSpace-<version>-android-armeabi-v7a.apk`
+   - `QingSpace-<version>-windows-x64-setup.exe` — Inno Setup installer
+   - `QingSpace-<version>-windows-x64.zip` — portable, same binaries
 
 A tag containing `-` (such as `v1.2.0-beta.1`) is published as a pre-release.
 `releases/latest` skips pre-releases, so the in-app updater will not offer them.
+
+## The Windows installer
+
+Built by `windows/installer/qingspace.iss` with Inno Setup. CI compiles it on
+every push against the debug build, so a broken script shows up before a release
+rather than during one.
+
+- **`AppId` must never change.** It is how Windows recognises an existing
+  install and upgrades it in place; a new GUID would leave two entries in
+  Settings → Apps and two copies on disk.
+- **Per-user by default** (`PrivilegesRequired=lowest`), so installing raises no
+  UAC prompt and `{autopf}` lands in `%LOCALAPPDATA%\Programs`. Pass `/ALLUSERS`
+  for a machine-wide install.
+- **Pre-release versions are handled.** `VersionInfoVersion` only accepts a
+  numeric version, so the script strips any `-beta.1` suffix for the Win32
+  resource while the displayed version keeps it.
+- **User settings survive uninstall.** `%APPDATA%\com.qingspace\qing_space`
+  holds the couple profile, tokens and theme, and is deliberately left alone.
+- `ChineseSimplified.isl` is vendored next to the script; Inno Setup does not
+  bundle it, and fetching it at build time would make releases depend on a
+  third-party URL staying up.
+
+To build one by hand:
+
+```bash
+flutter build windows --release
+ISCC.exe /DAppVersion=1.2.0 windows\installer\qingspace.iss
+```
 
 ## How the in-app updater consumes a release
 

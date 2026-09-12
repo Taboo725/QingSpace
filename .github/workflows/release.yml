@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release, e.g. v1.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  # Tag name for either trigger, without the leading refs/tags/.
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  # The in-app updater compares the release tag against the running build's
+  # version, so a tag that disagrees with pubspec.yaml would ship an update
+  # users can never satisfy. Catch it before anything is built.
+  verify:
+    name: Verify tag matches pubspec
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - id: check
+        run: |
+          TAG_VERSION="${TAG#v}"
+          PUBSPEC_VERSION="$(grep -m1 '^version:' pubspec.yaml | sed 's/^version:[[:space:]]*//' | cut -d'+' -f1 | tr -d '[:space:]')"
+          echo "tag=$TAG_VERSION pubspec=$PUBSPEC_VERSION"
+          if [ "$TAG_VERSION" != "$PUBSPEC_VERSION" ]; then
+            echo "::error::Tag $TAG_VERSION does not match pubspec.yaml version $PUBSPEC_VERSION."
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Build Android APK
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Release APKs must be signed with a stable key. Falling back to the
+      # debug keystore would produce a different signature on every CI run, and
+      # Android refuses to update an installed app whose signature changed —
+      # which would silently break the in-app updater for every user.
+      # Secrets are passed as env vars rather than interpolated into the script,
+      # so a password containing shell metacharacters cannot corrupt the file
+      # or leak through the command line.
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Missing ANDROID_KEYSTORE_BASE64 secret. See docs/RELEASING.md."
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/upload-keystore.jks
+          {
+            printf 'storeFile=upload-keystore.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > android/key.properties
+
+      - run: flutter pub get
+
+      - name: Build
+        run: flutter build apk --release
+
+      - name: Name the artifact
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             "QingSpace-${{ needs.verify.outputs.version }}-android.apk"
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/upload-keystore.jks android/key.properties
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: QingSpace-*-android.apk
+          if-no-files-found: error
+
+  windows:
+    name: Build Windows
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build
+        run: flutter build windows --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "QingSpace-${{ needs.verify.outputs.version }}-windows-x64"
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath "$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: QingSpace-*-windows-x64.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [verify, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - name: Collect release notes
+        id: notes
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            if [ -f CHANGELOG.md ]; then
+              # Everything under the heading for this version, up to the next one.
+              awk -v ver="## ${{ needs.verify.outputs.version }}" '
+                $0 ~ "^"ver { found=1; next }
+                found && /^## / { exit }
+                found { print }
+              ' CHANGELOG.md
+            fi
+            echo
+            echo '### 下载'
+            echo '- **Android**: `QingSpace-${{ needs.verify.outputs.version }}-android.apk`'
+            echo '- **Windows**: `QingSpace-${{ needs.verify.outputs.version }}-windows-x64.zip`（解压后运行 `qing_space.exe`）'
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: QingSpace ${{ needs.verify.outputs.version }}
+          body: ${{ steps.notes.outputs.body }}
+          files: dist/*
+          draft: false
+          prerelease: ${{ contains(needs.verify.outputs.version, '-') }}

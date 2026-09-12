@@ -1,0 +1,47 @@
+# Changelog
+
+All notable changes are recorded here. Versions follow [semantic
+versioning](https://semver.org/lang/zh-CN/); the section headings are what the
+release workflow copies into the GitHub Release body.
+
+## 1.1.0
+
+首个公开发布版本。
+
+### 新增
+
+- **应用内更新**：从 GitHub Releases 检查新版本。Android 可直接下载并交由系统安装器完成安装；桌面端提示并跳转到 Release 页面。可在设置中关闭自动检查，或跳过某个版本。
+- **全新应用图标**：两枚交叠的圆环，交集处以负空间形式镂出一颗心。图标由 `tool/generate_icon.py` 生成，位图与 SVG 母版共用同一份几何参数。
+- 设置页新增「关于」区块：版本号、更新日志、开源仓库入口。
+
+### 修复
+
+- 相册条目的日期在每次增删改后会被清空 —— 序列化时遗漏了 `date` 字段，而「那年今日」依赖它。
+- 文章分类过滤会匹配正文内容：正文里出现 `category: letters` 的文章会被错误归类。改为只解析 frontmatter。
+- 文章编辑器在 `build()` 中重复创建 `TextEditingController`，导致内存泄漏且光标位置被重置。
+- 重命名文章时若 SHA 未知会直接崩溃。写入路径现在总是重新读取 GitHub 上的实时 SHA。
+- 随记内容中的引号、反斜杠、换行会破坏 `moments.yml` 的格式。
+- 图库与随记编辑页未释放 `TextEditingController`。
+
+### 改进
+
+- **启动不再等待网络**：数据源探测移至后台进行，界面立即可用。此前最长会白屏 8 秒。
+- **图片内存占用大幅降低**：列表与网格中的图片按显示尺寸解码，单张 4000px 照片的解码开销从约 64 MB 降至约 2 MB。
+- 文章列表改为限流批量拉取，不再无限并发请求，避免触发 GitHub API 限流。
+- 新建文章时不再为了取一个序号而下载全部文章正文。
+- 首页背景的三个高斯模糊光晕提取为常量组件，切换模块时不再重新计算。
+- 补充了单元测试与组件测试（此前没有任何测试）。
+
+## 1.0.3 — 2026-03-02
+
+- 修复 GitHub 内容加载问题
+- 新增设置页、主题设置、调试模式开关
+- 新增版本信息与更新日志
+
+## 1.0.1 — 2026-02-15
+
+- 随记支持修改日期
+
+## 1.0.0 — 2025-02-15
+
+- 首个版本

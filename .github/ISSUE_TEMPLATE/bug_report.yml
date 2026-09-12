@@ -1,0 +1,56 @@
+name: Bug report / 问题反馈
+description: Something is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened? / 发生了什么？
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version / 应用版本
+      description: Settings → About shows this, e.g. `1.1.0 · build 5`
+      placeholder: '1.1.0 · build 5'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / 平台
+      options:
+        - Android
+        - Windows
+        - iOS
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data-source
+    attributes:
+      label: Active data source / 当前数据源
+      description: Settings → Data Sources → Active Source
+      options:
+        - GitHub
+        - Gitee
+        - "Not sure / 不确定"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / 日志
+      description: >
+        Output from `flutter run` if you can reproduce it from source.
+        **Redact your access token before pasting.**
+      render: shell
+    validations:
+      required: false

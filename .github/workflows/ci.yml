@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-test:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        # analysis_options.yaml escalates unused code and dead code to errors,
+        # so a clean run here is the contract.
+        run: flutter analyze --fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Check the committed icons match tool/generate_icon.py
+        run: |
+          python -m pip install --quiet Pillow
+          python tool/generate_icon.py
+          if ! git diff --quiet -- assets/icon; then
+            echo "::error::assets/icon is out of date. Run 'python tool/generate_icon.py' and commit the result."
+            git diff --stat -- assets/icon
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: analyze-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: android
+            os: ubuntu-latest
+            command: flutter build apk --debug
+          - target: windows
+            os: windows-latest
+            command: flutter build windows --debug
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: ${{ matrix.command }}

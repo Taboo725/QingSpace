@@ -140,16 +140,35 @@ jobs:
       - name: Build
         run: flutter build windows --release
 
-      - name: Package
+      - name: Package portable zip
         shell: pwsh
         run: |
           $name = "QingSpace-${{ needs.verify.outputs.version }}-windows-x64"
           Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath "$name.zip"
 
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+                                      "$env:ProgramFiles\Inno Setup 6\ISCC.exe" `
+                                -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+                                        "$env:ProgramFiles\Inno Setup 6\ISCC.exe" `
+                                  -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup" }
+          & $iscc.FullName /DAppVersion=${{ needs.verify.outputs.version }} windows\installer\qingspace.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+          Move-Item build\installer\*.exe .
+          Get-ChildItem QingSpace-* | Select-Object Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}}
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: QingSpace-*-windows-x64.zip
+          # Both the portable zip and the installer.
+          path: QingSpace-*-windows-x64*
           if-no-files-found: error
 
   publish:
@@ -183,7 +202,8 @@ jobs:
             echo '### 下载'
             echo '- **Android（绝大多数手机）**: `QingSpace-${{ needs.verify.outputs.version }}-android-arm64-v8a.apk`'
             echo '- **Android（2015 年前的 32 位机型）**: `QingSpace-${{ needs.verify.outputs.version }}-android-armeabi-v7a.apk`'
-            echo '- **Windows**: `QingSpace-${{ needs.verify.outputs.version }}-windows-x64.zip`（解压后运行 `qing_space.exe`）'
+            echo '- **Windows 安装版**: `QingSpace-${{ needs.verify.outputs.version }}-windows-x64-setup.exe`（推荐，免管理员权限，可从「设置 > 应用」卸载）'
+            echo '- **Windows 便携版**: `QingSpace-${{ needs.verify.outputs.version }}-windows-x64.zip`（解压后直接运行 `qing_space.exe`）'
             echo
             echo '不确定选哪个就装 arm64-v8a；应用内更新会自动挑对应架构。'
             echo 'RELEASE_NOTES_EOF'

@@ -75,3 +75,24 @@ jobs:
 
       - run: flutter pub get
       - run: ${{ matrix.command }}
+
+      # Compiles the installer against the debug output. Catches a broken
+      # .iss on every push instead of only when a release is cut.
+      - name: Compile Windows installer
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $iscc = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+                                      "$env:ProgramFiles\Inno Setup 6\ISCC.exe" `
+                                -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+                                        "$env:ProgramFiles\Inno Setup 6\ISCC.exe" `
+                                  -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup" }
+          & $iscc.FullName /DAppVersion=0.0.0-ci `
+            /DSourceDir=..\..\build\windows\x64\runner\Debug `
+            windows\installer\qingspace.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }

@@ -9,3 +9,9 @@ It bundles the following third-party assets:
   Copyright (c) 2017 Adobe (http://www.adobe.com/)
   Licensed under the SIL Open Font License, Version 1.1.
   https://github.com/adobe-fonts/source-han-serif
+
+  Inno Setup Simplified Chinese translation
+  (windows/installer/ChineseSimplified.isl)
+  Maintained by Zhenghan Yang, distributed with Inno Setup.
+  https://github.com/jrsoftware/issrc
+  https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation

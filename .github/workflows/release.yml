@@ -94,13 +94,22 @@ jobs:
 
       - run: flutter pub get
 
+      # One APK per ABI instead of one carrying all three. The native
+      # libraries were 55% of the download and a device uses exactly one
+      # set; the in-app updater picks the matching asset by name.
       - name: Build
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
-      - name: Name the artifact
+      - name: Name the artifacts
         run: |
-          mv build/app/outputs/flutter-apk/app-release.apk \
-             "QingSpace-${{ needs.verify.outputs.version }}-android.apk"
+          VERSION="${{ needs.verify.outputs.version }}"
+          # x86_64 is emulator-only; developers who need it can build it.
+          for abi in arm64-v8a armeabi-v7a; do
+            src="build/app/outputs/flutter-apk/app-$abi-release.apk"
+            test -f "$src" || { echo "::error::Missing $src"; exit 1; }
+            mv "$src" "QingSpace-$VERSION-android-$abi.apk"
+          done
+          ls -la QingSpace-*.apk
 
       - name: Remove signing material
         if: always()
@@ -109,7 +118,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: QingSpace-*-android.apk
+          path: QingSpace-*-android-*.apk
           if-no-files-found: error
 
   windows:
@@ -172,8 +181,11 @@ jobs:
             fi
             echo
             echo '### 下载'
-            echo '- **Android**: `QingSpace-${{ needs.verify.outputs.version }}-android.apk`'
+            echo '- **Android（绝大多数手机）**: `QingSpace-${{ needs.verify.outputs.version }}-android-arm64-v8a.apk`'
+            echo '- **Android（2015 年前的 32 位机型）**: `QingSpace-${{ needs.verify.outputs.version }}-android-armeabi-v7a.apk`'
             echo '- **Windows**: `QingSpace-${{ needs.verify.outputs.version }}-windows-x64.zip`（解压后运行 `qing_space.exe`）'
+            echo
+            echo '不确定选哪个就装 arm64-v8a；应用内更新会自动挑对应架构。'
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 

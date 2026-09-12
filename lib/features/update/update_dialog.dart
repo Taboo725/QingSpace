@@ -109,8 +109,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '当前版本 ${AppInfo.version}'
-              '${release.apkSize > 0 && canInstall ? '  ·  ${_formatBytes(release.apkSize)}' : ''}',
+              _subtitleFor(release, canInstall),
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             const SizedBox(height: 16),
@@ -205,6 +204,14 @@ class _UpdateDialogState extends State<_UpdateDialog> {
       ],
     );
   }
+}
+
+/// "current version · download size", with the size only when it is both known
+/// and about to be used.
+String _subtitleFor(ReleaseInfo release, bool canInstall) {
+  final size = release.apk?.size ?? 0;
+  final suffix = (canInstall && size > 0) ? '  ·  ${_formatBytes(size)}' : '';
+  return '当前版本 ${AppInfo.version}$suffix';
 }
 
 String _formatBytes(int bytes) {

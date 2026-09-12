@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi' show Abi;
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -78,6 +79,52 @@ class SemanticVersion implements Comparable<SemanticVersion> {
       '$major.$minor.$patch${preRelease.isEmpty ? '' : '-$preRelease'}';
 }
 
+/// A downloadable file attached to a release.
+@immutable
+class ReleaseAsset {
+  final String name;
+  final String url;
+
+  /// Size in bytes, 0 when the API did not report one.
+  final int size;
+
+  const ReleaseAsset({required this.name, required this.url, this.size = 0});
+}
+
+/// The Android ABI directory name for the running process, or null off Android.
+///
+/// Read from `dart:ffi` rather than a plugin — the Dart VM already knows which
+/// architecture it was compiled for.
+String? currentAndroidAbiTag() => switch (Abi.current()) {
+  Abi.androidArm64 => 'arm64-v8a',
+  Abi.androidArm => 'armeabi-v7a',
+  Abi.androidX64 => 'x86_64',
+  Abi.androidIA32 => 'x86',
+  _ => null,
+};
+
+/// Chooses which APK to install from a release's attachments.
+///
+/// Releases ship one APK per ABI, so the wrong one would install and then
+/// crash on launch. When nothing matches — an unknown ABI, or a release that
+/// predates the split — a lone universal APK is accepted, but a set of
+/// architecture-specific ones is refused rather than guessed at.
+ReleaseAsset? selectApkAsset(List<ReleaseAsset> assets, String? abiTag) {
+  if (assets.isEmpty) return null;
+  if (abiTag != null) {
+    for (final asset in assets) {
+      if (asset.name.toLowerCase().contains(abiTag)) return asset;
+    }
+  }
+  final universal = assets.where((a) => !_abiTagged.hasMatch(a.name)).toList();
+  return universal.length == 1 ? universal.single : null;
+}
+
+final RegExp _abiTagged = RegExp(
+  r'arm64-v8a|armeabi-v7a|x86_64|x86',
+  caseSensitive: false,
+);
+
 /// A published release, as far as the updater cares about it.
 @immutable
 class ReleaseInfo {
@@ -90,40 +137,41 @@ class ReleaseInfo {
   /// Human-facing page, used when the app cannot install the update itself.
   final String pageUrl;
 
-  /// Direct download for the Android package, absent on releases that only
-  /// ship desktop builds.
-  final String? apkUrl;
-
-  /// Size of [apkUrl] in bytes, 0 when unknown.
-  final int apkSize;
+  /// Every `.apk` attached to the release, one per Android ABI.
+  final List<ReleaseAsset> apkAssets;
 
   const ReleaseInfo({
     required this.version,
     required this.tagName,
     required this.notes,
     required this.pageUrl,
-    this.apkUrl,
-    this.apkSize = 0,
+    this.apkAssets = const [],
   });
 
+  /// The APK for this device, or null when none applies.
+  ReleaseAsset? get apk => selectApkAsset(apkAssets, currentAndroidAbiTag());
+
   /// True when this build can be fetched and handed to the OS installer.
-  bool get canInstallInApp => Platform.isAndroid && apkUrl != null;
+  bool get canInstallInApp => Platform.isAndroid && apk != null;
 
   static ReleaseInfo? fromJson(Map<String, dynamic> json) {
     final tag = json['tag_name']?.toString() ?? '';
     final version = SemanticVersion.tryParse(tag);
     if (version == null) return null;
 
-    String? apkUrl;
-    var apkSize = 0;
+    final apkAssets = <ReleaseAsset>[];
     for (final raw in (json['assets'] as List? ?? const [])) {
       final asset = raw as Map<String, dynamic>;
-      final name = asset['name']?.toString().toLowerCase() ?? '';
-      if (name.endsWith('.apk')) {
-        apkUrl = asset['browser_download_url']?.toString();
-        apkSize = (asset['size'] as num?)?.toInt() ?? 0;
-        break;
-      }
+      final name = asset['name']?.toString() ?? '';
+      final url = asset['browser_download_url']?.toString();
+      if (url == null || !name.toLowerCase().endsWith('.apk')) continue;
+      apkAssets.add(
+        ReleaseAsset(
+          name: name,
+          url: url,
+          size: (asset['size'] as num?)?.toInt() ?? 0,
+        ),
+      );
     }
 
     return ReleaseInfo(
@@ -131,8 +179,7 @@ class ReleaseInfo {
       tagName: tag,
       notes: json['body']?.toString().trim() ?? '',
       pageUrl: json['html_url']?.toString() ?? AppInfo.releasesUrl,
-      apkUrl: apkUrl,
-      apkSize: apkSize,
+      apkAssets: apkAssets,
     );
   }
 }
@@ -249,18 +296,18 @@ class UpdateService {
     required void Function(double progress) onProgress,
     CancellationToken? cancel,
   }) async {
-    final url = release.apkUrl;
-    if (url == null) throw StateError('Release has no APK asset');
+    final asset = release.apk;
+    if (asset == null) throw StateError('这个版本没有适用于本机的安装包');
 
     final file = await _apkFile(release);
-    final request = http.Request('GET', Uri.parse(url));
+    final request = http.Request('GET', Uri.parse(asset.url));
     final response = await _client.send(request).timeout(_timeout);
 
     if (response.statusCode != 200) {
       throw HttpException('下载失败：HTTP ${response.statusCode}', uri: request.url);
     }
 
-    final total = response.contentLength ?? release.apkSize;
+    final total = response.contentLength ?? asset.size;
     final sink = file.openWrite();
     var received = 0;
 

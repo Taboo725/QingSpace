@@ -87,33 +87,52 @@ void main() {
   });
 
   group('ReleaseInfo.fromJson', () {
-    test('picks the APK asset and its size', () {
+    test('collects every APK asset and ignores the rest', () {
       final release = ReleaseInfo.fromJson(
         releaseJson(
           assets: [
             {
-              'name': 'QingSpace-1.1.0-windows.zip',
+              'name': 'QingSpace-1.1.0-windows-x64.zip',
               'browser_download_url': 'https://example.test/w.zip',
               'size': 11,
             },
             {
-              'name': 'QingSpace-1.1.0.apk',
-              'browser_download_url': 'https://example.test/a.apk',
+              'name': 'QingSpace-1.1.0-android-arm64-v8a.apk',
+              'browser_download_url': 'https://example.test/a64.apk',
               'size': 2048,
+            },
+            {
+              'name': 'QingSpace-1.1.0-android-armeabi-v7a.apk',
+              'browser_download_url': 'https://example.test/a32.apk',
+              'size': 1024,
             },
           ],
         ),
       )!;
 
-      expect(release.apkUrl, 'https://example.test/a.apk');
-      expect(release.apkSize, 2048);
+      expect(release.apkAssets.map((a) => a.name), [
+        'QingSpace-1.1.0-android-arm64-v8a.apk',
+        'QingSpace-1.1.0-android-armeabi-v7a.apk',
+      ]);
+      expect(release.apkAssets.first.size, 2048);
       expect(release.version, v('9.9.9'));
     });
 
     test('tolerates a release with no APK', () {
       final release = ReleaseInfo.fromJson(releaseJson())!;
-      expect(release.apkUrl, isNull);
+      expect(release.apkAssets, isEmpty);
       expect(release.canInstallInApp, isFalse);
+    });
+
+    test('skips assets with no download URL', () {
+      final release = ReleaseInfo.fromJson(
+        releaseJson(
+          assets: [
+            {'name': 'broken.apk', 'size': 1},
+          ],
+        ),
+      )!;
+      expect(release.apkAssets, isEmpty);
     });
 
     test('returns null when the tag is not a version', () {
@@ -123,6 +142,49 @@ void main() {
     test('falls back to the releases page when html_url is missing', () {
       final json = releaseJson()..remove('html_url');
       expect(ReleaseInfo.fromJson(json)!.pageUrl, AppInfo.releasesUrl);
+    });
+  });
+
+  group('selectApkAsset', () {
+    ReleaseAsset asset(String name) =>
+        ReleaseAsset(name: name, url: 'https://example.test/$name');
+
+    final perAbi = [
+      asset('QingSpace-1.1.0-android-arm64-v8a.apk'),
+      asset('QingSpace-1.1.0-android-armeabi-v7a.apk'),
+      asset('QingSpace-1.1.0-android-x86_64.apk'),
+    ];
+
+    test('picks the build matching the device ABI', () {
+      expect(selectApkAsset(perAbi, 'arm64-v8a')!.name, contains('arm64-v8a'));
+      expect(
+        selectApkAsset(perAbi, 'armeabi-v7a')!.name,
+        contains('armeabi-v7a'),
+      );
+      expect(selectApkAsset(perAbi, 'x86_64')!.name, contains('x86_64'));
+    });
+
+    test('does not confuse arm64-v8a with armeabi-v7a', () {
+      // Substring matching on a bare "arm" would hand a 32-bit device the
+      // 64-bit build, which installs and then fails to launch.
+      final only64 = [asset('QingSpace-1.1.0-android-arm64-v8a.apk')];
+      expect(selectApkAsset(only64, 'armeabi-v7a'), isNull);
+    });
+
+    test('refuses to guess when the ABI is unknown', () {
+      expect(selectApkAsset(perAbi, null), isNull);
+      expect(selectApkAsset(perAbi, 'riscv64'), isNull);
+    });
+
+    test('accepts a lone universal APK regardless of ABI', () {
+      final universal = [asset('QingSpace-1.1.0-android.apk')];
+      expect(selectApkAsset(universal, 'arm64-v8a')!.name, contains('android'));
+      expect(selectApkAsset(universal, null)!.name, contains('android'));
+      expect(selectApkAsset(universal, 'riscv64')!.name, contains('android'));
+    });
+
+    test('returns null for an empty asset list', () {
+      expect(selectApkAsset(const [], 'arm64-v8a'), isNull);
     });
   });
 

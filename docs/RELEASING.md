@@ -60,7 +60,10 @@ keyPassword=...
 ```
 
 `android/app/build.gradle.kts` picks it up automatically and falls back to the
-debug key when it is absent.
+debug key when it is absent. Note that `storeFile` is resolved relative to
+`android/app/`, so a keystore sitting in `android/` needs a `../` prefix — the
+release workflow writes `storeFile=../upload-keystore.jks` for exactly that
+reason.
 
 ## Cutting a release
 

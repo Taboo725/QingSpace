@@ -79,8 +79,14 @@ jobs:
             exit 1
           fi
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/upload-keystore.jks
+          test -s android/upload-keystore.jks || {
+            echo "::error::Decoded keystore is empty — check ANDROID_KEYSTORE_BASE64."
+            exit 1
+          }
+          # storeFile is resolved by file() inside android/app/build.gradle.kts,
+          # so it is relative to android/app/ — hence the leading ../ .
           {
-            printf 'storeFile=upload-keystore.jks\n'
+            printf 'storeFile=../upload-keystore.jks\n'
             printf 'storePassword=%s\n' "$STORE_PASSWORD"
             printf 'keyAlias=%s\n' "$KEY_ALIAS"
             printf 'keyPassword=%s\n' "$KEY_PASSWORD"

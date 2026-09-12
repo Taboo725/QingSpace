@@ -8,6 +8,15 @@ class AppVersion {
 
   static const List<ChangelogEntry> changelog = [
     ChangelogEntry(
+      version: '1.1.1',
+      date: '2026-09-12',
+      changes: [
+        '安装包体积大幅缩减：Android 107 MB → 30 MB，Windows 60 MB → 23 MB',
+        '按 CPU 架构分发安装包，更新时自动选择匹配的版本',
+        '字体按常用字集裁剪；生僻字回退系统字体显示',
+      ],
+    ),
+    ChangelogEntry(
       version: '1.1.0',
       date: '2026-09-12',
       changes: [

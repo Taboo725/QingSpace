@@ -110,15 +110,37 @@ most once a day.
 
 - It parses `tag_name` as a semantic version and compares it numerically against
   the running build.
-- On Android it looks for the first asset whose name ends in `.apk`, downloads it
-  to the cache directory, and opens it with the system package installer. The
-  user still has to allow "install unknown apps" and confirm.
+- On Android it picks the `.apk` whose name contains the device's ABI
+  (`arm64-v8a` or `armeabi-v7a`, read from `dart:ffi`'s `Abi.current()`),
+  downloads it to the cache directory, and opens it with the system package
+  installer. The user still has to allow "install unknown apps" and confirm.
 - On Windows and other desktops it opens the release page in a browser; replacing
   a running executable in place is not something the app attempts.
 
-Two consequences for the asset naming: **keep exactly one `.apk` per release**,
-and keep the `v` prefix on tags consistent (the parser accepts both, but mixing
-them makes the release list harder to read).
+Consequences for asset naming:
+
+- **Every APK must carry its ABI in the filename.** If none matches the device,
+  the updater refuses to guess and falls back to opening the release page — it
+  will not install a 64-bit build on a 32-bit phone.
+- A release that ships a *single* APK with no ABI in the name is still accepted
+  as a universal build, which is how pre-1.1.1 releases keep working.
+- Keep the `v` prefix on tags consistent (the parser accepts both, but mixing
+  them makes the release list harder to read).
+
+## Download size
+
+Two things keep the build small; both are easy to undo by accident.
+
+- **`--split-per-abi`.** The native libraries are ~20 MB *per architecture*. A
+  universal APK carries all three and was 55% native code. Do not drop the flag.
+- **Font subsetting.** `tool/subset_fonts.py` cuts each Source Han Serif CN
+  weight from ~10.7 MB to ~2.1 MB. The subset fonts are what is committed; the
+  full originals are not in the repo. To re-subset (after adding a weight, or
+  changing the character set) put the upstream OTFs in `build/fonts_full/` and
+  re-run the script — see its docstring for where to download them.
+
+For reference, 1.1.1 measured 30.1 MB (arm64 APK) and 22.7 MB (Windows zip),
+against 106.9 MB and 60.4 MB for 1.1.0.
 
 ## Re-running a failed release
 

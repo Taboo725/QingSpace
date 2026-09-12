@@ -4,6 +4,19 @@ All notable changes are recorded here. Versions follow [semantic
 versioning](https://semver.org/lang/zh-CN/); the section headings are what the
 release workflow copies into the GitHub Release body.
 
+## 1.1.1
+
+安装包瘦身：Android 从 106.9 MB 降到 30.1 MB，Windows 压缩包从 60.4 MB 降到 22.7 MB。
+
+### 改进
+
+- **按 CPU 架构分包**：原来的通用 APK 同时打包了 arm64-v8a / armeabi-v7a / x86_64 三套原生库，占了整包的 55%，而任何一台设备只用得上其中一套。现在每个架构单独出包，应用内更新会依据设备架构自动选择对应文件。
+- **字体子集化**：思源宋体每个字重原本含约 31000 个字形、10.7 MB，现按 GB2312（6763 汉字）加标点、拉丁字母以及应用自身全部文案裁剪至约 2.1 MB。GB2312 覆盖现代中文约 99.75% 的用字；超出范围的生僻字会回退到系统字体显示，而不是变成方框。
+
+### 修复
+
+- `font_awesome_flutter` 10.x 继承了已变为 `final class` 的 `IconData`，在当前 Flutter 上无法编译，升级至 11.x。
+
 ## 1.1.0
 
 首个公开发布版本。

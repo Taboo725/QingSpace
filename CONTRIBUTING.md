@@ -66,6 +66,22 @@ Commit both `assets/icon/` and the regenerated platform files. CI verifies the
 committed masters against the generator (`tool/verify_icon.py`). Do not hand-edit
 the PNGs or `icon.svg`; they are build products and CI will notice.
 
+## Changing the bundled fonts
+
+`assets/fonts/` holds *subset* Source Han Serif CN weights — GB2312 plus
+punctuation, Latin and every character in the app's own Dart string literals.
+The full upstream weights are ~10.7 MB each and are deliberately not in the
+repo.
+
+If you add UI text using a character outside that set it will still render, but
+in the platform's fallback face rather than the serif. To fold new characters in
+(or add a weight), download the upstream OTFs into `build/fonts_full/` and:
+
+```bash
+python -m pip install fonttools
+python tool/subset_fonts.py
+```
+
 ## Commit messages
 
 Conventional-ish prefixes (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`) are

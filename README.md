@@ -25,8 +25,12 @@ Grab the latest build from the [**Releases**](https://github.com/Taboo725/QingSp
 
 | Platform | File | Notes |
 |----------|------|-------|
-| Android | `QingSpace-<version>-android.apk` | Sideload it; you will need to allow installs from unknown sources. |
+| Android (almost every phone) | `QingSpace-<version>-android-arm64-v8a.apk` | Sideload it; you will need to allow installs from unknown sources. |
+| Android (32-bit, pre-2015) | `QingSpace-<version>-android-armeabi-v7a.apk` | Only if the arm64 build refuses to install. |
 | Windows | `QingSpace-<version>-windows-x64.zip` | Unzip anywhere and run `qing_space.exe`. No installer. |
+
+Not sure which Android build? Take `arm64-v8a`. The in-app updater picks the
+right architecture on its own.
 
 The app checks for updates once a day and can install them for you on Android.
 Turn it off in **Settings → About → 启动时自动检查**.
@@ -57,7 +61,7 @@ developer account to distribute signed builds.
 | Image caching | cached_network_image |
 | Markdown rendering | flutter_markdown |
 | Lunar calendar | lunar package |
-| Typography | Source Han Serif CN (bundled, 5 weights) |
+| Typography | Source Han Serif CN (bundled, 5 weights, subset to GB2312) |
 
 ## 🚀 Getting Started
 

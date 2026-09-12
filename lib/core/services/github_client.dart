@@ -71,14 +71,4 @@ class GitHubClient {
     await prefs.remove(_repoKey);
     await prefs.remove(_branchKey);
   }
-
-  // Keep for backward compat with any callers that only save the token.
-  static Future<void> saveToken(String token) => saveConfig(
-    token: token,
-    user: _user,
-    repo: _repo,
-    branch: _branch,
-  );
-
-  static Future<void> clearToken() => clearConfig();
 }

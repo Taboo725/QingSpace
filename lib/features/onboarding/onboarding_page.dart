@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/couple_config.dart';
+import '../../core/utils/lunar_labels.dart';
 
 class OnboardingPage extends StatefulWidget {
   final bool isEditing;
@@ -28,13 +31,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   bool _saving = false;
 
-  static const _lunarMonths = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
-  static const _lunarDays = [
-    '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-    '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-    '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -44,11 +40,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
       _startDate = CoupleConfig.startDate;
       if (CoupleConfig.hasP1Birthday) {
         final year = CoupleConfig.p1BdYear > 0 ? CoupleConfig.p1BdYear : 2000;
-        _p1Birthday = DateTime(year, CoupleConfig.p1BdMonth, CoupleConfig.p1BdDay);
+        _p1Birthday = DateTime(
+          year,
+          CoupleConfig.p1BdMonth,
+          CoupleConfig.p1BdDay,
+        );
       }
       if (CoupleConfig.hasP2Birthday) {
         final year = CoupleConfig.p2BdYear > 0 ? CoupleConfig.p2BdYear : 2000;
-        _p2Birthday = DateTime(year, CoupleConfig.p2BdMonth, CoupleConfig.p2BdDay);
+        _p2Birthday = DateTime(
+          year,
+          CoupleConfig.p2BdMonth,
+          CoupleConfig.p2BdDay,
+        );
       }
       if (CoupleConfig.hasP1LunarBirthday) {
         _p1LunarMonth = CoupleConfig.p1LunarBdMonth;
@@ -84,11 +88,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Future<void> _pickBirthday({required bool isPerson1}) async {
     final existing = isPerson1 ? _p1Birthday : _p2Birthday;
     final now = DateTime.now();
-    final initial = existing ?? DateTime(now.year - 25, 1, 1);
+    final initial = existing ?? DateTime(now.year - 25);
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(1920, 1, 1),
+      firstDate: DateTime(1920),
       lastDate: now,
       helpText: 'Select birthday',
     );
@@ -111,7 +115,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
         ? (_p1LunarDay > 0 ? _p1LunarDay : 1)
         : (_p2LunarDay > 0 ? _p2LunarDay : 1);
 
-    final monthController = FixedExtentScrollController(initialItem: tempMonth - 1);
+    final monthController = FixedExtentScrollController(
+      initialItem: tempMonth - 1,
+    );
     final dayController = FixedExtentScrollController(initialItem: tempDay - 1);
 
     await showModalBottomSheet<void>(
@@ -184,15 +190,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         child: ListWheelScrollView.useDelegate(
                           controller: monthController,
                           itemExtent: 44,
-                          perspective: 0.003,
                           diameterRatio: 1.6,
                           physics: const FixedExtentScrollPhysics(),
                           onSelectedItemChanged: (i) => tempMonth = i + 1,
                           childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: 12,
+                            childCount: LunarLabels.monthCount,
                             builder: (_, i) => Center(
                               child: Text(
-                                '${_lunarMonths[i]}月',
+                                LunarLabels.month(i + 1),
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey[800],
@@ -206,15 +211,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         child: ListWheelScrollView.useDelegate(
                           controller: dayController,
                           itemExtent: 44,
-                          perspective: 0.003,
                           diameterRatio: 1.6,
                           physics: const FixedExtentScrollPhysics(),
                           onSelectedItemChanged: (i) => tempDay = i + 1,
                           childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: 30,
+                            childCount: LunarLabels.dayCount,
                             builder: (_, i) => Center(
                               child: Text(
-                                _lunarDays[i],
+                                LunarLabels.day(i + 1),
                                 style: TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey[800],
@@ -267,7 +271,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (widget.isEditing) {
       Navigator.pop(context, true);
     } else {
-      Navigator.pushReplacementNamed(context, '/home');
+      unawaited(Navigator.pushReplacementNamed(context, '/home'));
     }
   }
 
@@ -276,10 +280,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
     return '${d.year} / ${d.month.toString().padLeft(2, '0')} / ${d.day.toString().padLeft(2, '0')}';
   }
 
-  String _formatLunarDate(int month, int day) {
-    if (month == 0 || day == 0) return 'Not set';
-    return '${_lunarMonths[month - 1]}月 · ${_lunarDays[day - 1]}';
-  }
+  String _formatLunarDate(int month, int day) =>
+      LunarLabels.compact(month, day) ?? 'Not set';
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +297,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
             child: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 48,
+                ),
                 children: [
                   // Header
                   Icon(Icons.favorite_rounded, size: 40, color: primaryColor),
@@ -328,7 +333,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   const SizedBox(height: 12),
                   _nameField(_p1NameController, 'Your name', 'e.g. Alex'),
                   const SizedBox(height: 12),
-                  _nameField(_p2NameController, 'Partner\'s name', 'e.g. Jordan'),
+                  _nameField(
+                    _p2NameController,
+                    'Partner\'s name',
+                    'e.g. Jordan',
+                  ),
                   const SizedBox(height: 32),
 
                   // Start date
@@ -390,7 +399,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         const SizedBox(width: 4),
                         Text(
                           'Lunar birthdays  ·  optional',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[400],
+                          ),
                         ),
                       ],
                     ),
@@ -406,9 +418,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       onTap: () => _pickLunarBirthday(isPerson1: true),
                       onClear: (_p1LunarMonth > 0 || _p1LunarDay > 0)
                           ? () => setState(() {
-                                _p1LunarMonth = 0;
-                                _p1LunarDay = 0;
-                              })
+                              _p1LunarMonth = 0;
+                              _p1LunarDay = 0;
+                            })
                           : null,
                     ),
                     const SizedBox(height: 10),
@@ -421,9 +433,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       onTap: () => _pickLunarBirthday(isPerson1: false),
                       onClear: (_p2LunarMonth > 0 || _p2LunarDay > 0)
                           ? () => setState(() {
-                                _p2LunarMonth = 0;
-                                _p2LunarDay = 0;
-                              })
+                              _p2LunarMonth = 0;
+                              _p2LunarDay = 0;
+                            })
                           : null,
                     ),
                   ],
@@ -501,7 +513,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
         labelText: label,
         hintText: hint,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
       ),
       onChanged: (_) => setState(() {}),
     );
@@ -527,7 +542,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         side: BorderSide(
-          color: isSet ? color.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.3),
+          color: isSet
+              ? color.withValues(alpha: 0.5)
+              : Colors.grey.withValues(alpha: 0.3),
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         alignment: Alignment.centerLeft,
@@ -563,9 +580,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             side: BorderSide(
-              color: isSet ? color.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.3),
+              color: isSet
+                  ? color.withValues(alpha: 0.4)
+                  : Colors.grey.withValues(alpha: 0.3),
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: Text(
             _formatBirthday(date),
@@ -609,9 +630,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             side: BorderSide(
-              color: isSet ? color.withValues(alpha: 0.4) : Colors.grey.withValues(alpha: 0.3),
+              color: isSet
+                  ? color.withValues(alpha: 0.4)
+                  : Colors.grey.withValues(alpha: 0.3),
             ),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
           child: Text(
             _formatLunarDate(month, day),

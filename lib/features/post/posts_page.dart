@@ -66,38 +66,21 @@ class _PostsPageState extends State<PostsPage> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
+          }
+          if (snapshot.hasError || (snapshot.data?.isEmpty ?? true)) {
             return RefreshIndicator(
-              onRefresh: () async { _refresh(); },
-              child: ListView(
-                children: [
-                  SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.5,
-                    child: Center(
-                      child: PageStateWidget.error(
+              onRefresh: () async => _refresh(),
+              child: PageStateWidget.pullToRefreshBody(
+                context,
+                snapshot.hasError
+                    ? PageStateWidget.error(
                         message: '加载失败，下拉可重试',
                         onRetry: _refresh,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async { _refresh(); },
-              child: ListView(
-                children: [
-                  SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.5,
-                    child: Center(
-                      child: PageStateWidget.empty(
+                      )
+                    : PageStateWidget.empty(
                         message: '还没有文章，快去写第一篇吧',
                         icon: Icons.article_outlined,
                       ),
-                    ),
-                  ),
-                ],
               ),
             );
           }
@@ -108,11 +91,11 @@ class _PostsPageState extends State<PostsPage> {
           posts.sort((a, b) {
             switch (_currentSort) {
               case SortOption.dateNewest:
-                int cmp = b.date.compareTo(a.date);
+                final int cmp = b.date.compareTo(a.date);
                 if (cmp == 0) return b.title.compareTo(a.title);
                 return cmp;
               case SortOption.dateOldest:
-                int cmp = a.date.compareTo(b.date);
+                final int cmp = a.date.compareTo(b.date);
                 if (cmp == 0) return a.title.compareTo(b.title);
                 return cmp;
               case SortOption.titleAZ:
@@ -128,7 +111,11 @@ class _PostsPageState extends State<PostsPage> {
               // Beautiful Header with Sort
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                    24, isMobile ? 6 : 16, 24, isMobile ? 2 : 8),
+                  24,
+                  isMobile ? 6 : 16,
+                  24,
+                  isMobile ? 2 : 8,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -195,10 +182,8 @@ class _PostsPageState extends State<PostsPage> {
                           final result = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => PostDetailPage(
-                                fileName: post.path,
-                                sha: post.sha,
-                              ),
+                              builder: (context) =>
+                                  PostDetailPage(fileName: post.path),
                             ),
                           );
                           if (result == true) _refresh();

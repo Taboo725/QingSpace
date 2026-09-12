@@ -1,9 +1,11 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+
 import 'package:file_picker/file_picker.dart';
-import '../../core/widgets/cdn_image.dart';
-import '../../models/gallery_item.dart';
+import 'package:flutter/material.dart';
+
 import '../../core/services/gallery_service.dart';
+import '../../core/widgets/net_image.dart';
+import '../../models/gallery_item.dart';
 
 class GalleryEditorPage extends StatefulWidget {
   final GalleryItem? editItem;
@@ -25,22 +27,24 @@ class _GalleryEditorPageState extends State<GalleryEditorPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.editItem != null) {
-      _captionController.text = widget.editItem!.caption;
-      _existingImageUrl = widget.editItem!.url;
+    final item = widget.editItem;
+    if (item != null) {
+      _captionController.text = item.caption;
+      _existingImageUrl = item.url;
     }
   }
 
-  Future<void> _pickImage() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-    );
+  @override
+  void dispose() {
+    _captionController.dispose();
+    super.dispose();
+  }
 
-    if (result != null) {
-      setState(() {
-        _selectedImage = File(result.files.single.path!);
-      });
-    }
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    setState(() => _selectedImage = File(path));
   }
 
   Future<void> _submit() async {
@@ -54,21 +58,22 @@ class _GalleryEditorPageState extends State<GalleryEditorPage> {
     setState(() => _isSubmitting = true);
 
     try {
+      // The URL is filled in by the service when a new file is uploaded;
+      // the stored date is carried through so editing never drops it.
       final item = GalleryItem(
-        url:
-            _existingImageUrl ??
-            '', // Will be updated by service if file provided
+        url: _existingImageUrl ?? '',
         caption: _captionController.text,
+        date: widget.editItem?.date,
       );
 
-      if (widget.editItem != null) {
+      final editItem = widget.editItem;
+      if (editItem != null) {
         await _service.updateGalleryItem(
-          widget.editItem!,
+          editItem,
           item,
           newImageFile: _selectedImage,
         );
       } else {
-        // Create stub item, service will fill URL
         await _service.addGalleryItem(item, imageFile: _selectedImage);
       }
 
@@ -76,10 +81,11 @@ class _GalleryEditorPageState extends State<GalleryEditorPage> {
         Navigator.pop(context, true); // Return true to indicate success
       }
     } catch (e) {
+      debugPrint('Gallery save failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('保存失败，请重试')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
       }
     } finally {
       if (mounted) {

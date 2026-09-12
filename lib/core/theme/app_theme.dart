@@ -23,7 +23,6 @@ class AppTheme {
         // background: config.backgroundColor, // Deprecated
         surface: cardColor,
         error: errorColor,
-        brightness: Brightness.light,
       ),
       scaffoldBackgroundColor: config.backgroundColor,
       // Minimalist Navigation Bar / Rail
@@ -78,16 +77,16 @@ class AppTheme {
           color: config.primaryColor,
           fontFamily: 'Source Han Serif CN',
         ),
-        bodyLarge: TextStyle(
+        bodyLarge: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
-          color: const Color(0xFF4A4A4A),
+          color: Color(0xFF4A4A4A),
           height: 1.6,
           fontFamily: 'Source Han Serif CN',
         ),
-        bodyMedium: TextStyle(
+        bodyMedium: const TextStyle(
           fontSize: 14,
-          color: const Color(0xFF666666),
+          color: Color(0xFF666666),
           height: 1.5,
           fontFamily: 'Source Han Serif CN',
         ),

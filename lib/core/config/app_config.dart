@@ -1,23 +1,27 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
+/// Which page a sidebar entry opens.
+enum ModuleKind { home, moments, gallery, posts }
+
+@immutable
 class SidebarModule {
   final String title;
-  final String iconName;
-  final String? categoryFilter;
-  final bool isHome;
+  final IconData icon;
+  final ModuleKind kind;
 
-  SidebarModule({
+  /// Frontmatter category this module filters posts by; null shows every post.
+  final String? categoryFilter;
+
+  const SidebarModule({
     required this.title,
-    required this.iconName,
+    required this.icon,
+    required this.kind,
     this.categoryFilter,
-    this.isHome = false,
   });
 }
 
 class AppConfig {
-  // ── App constants ─────────────────────────────────────────────────────────
-
-  static const String categoryField = 'category';
+  const AppConfig._();
 
   // ── Debug ─────────────────────────────────────────────────────────────────
 
@@ -29,18 +33,55 @@ class AppConfig {
   static DateTime? get debugDate => debugDateNotifier.value;
   static set debugDate(DateTime? value) => debugDateNotifier.value = value;
 
-  /// Returns the effective "today", respecting debug mode.
+  /// Returns the effective "today", respecting the debug date override.
   static DateTime get effectiveNow =>
       debugMode && debugDate != null ? debugDate! : DateTime.now();
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
-  static List<SidebarModule> get modules => [
-    SidebarModule(title: 'Home', iconName: 'home', isHome: true),
-    SidebarModule(title: 'Moments', iconName: 'timeline'),
-    SidebarModule(title: 'Diaries', iconName: 'book', categoryFilter: 'diaries'),
-    SidebarModule(title: 'Letters', iconName: 'mail', categoryFilter: 'letters'),
-    SidebarModule(title: 'Gallery', iconName: 'gallery'),
-    if (debugMode) SidebarModule(title: 'Posts', iconName: 'all_inclusive'),
+  static const List<SidebarModule> _baseModules = [
+    SidebarModule(
+      title: 'Home',
+      icon: Icons.home_filled,
+      kind: ModuleKind.home,
+    ),
+    SidebarModule(
+      title: 'Moments',
+      icon: Icons.camera,
+      kind: ModuleKind.moments,
+    ),
+    SidebarModule(
+      title: 'Diaries',
+      icon: Icons.book,
+      kind: ModuleKind.posts,
+      categoryFilter: 'diaries',
+    ),
+    SidebarModule(
+      title: 'Letters',
+      icon: Icons.mail,
+      kind: ModuleKind.posts,
+      categoryFilter: 'letters',
+    ),
+    SidebarModule(
+      title: 'Gallery',
+      icon: Icons.photo_library,
+      kind: ModuleKind.gallery,
+    ),
   ];
+
+  /// Shows every post regardless of category; debug builds only.
+  static const SidebarModule _allPostsModule = SidebarModule(
+    title: 'Posts',
+    icon: Icons.article,
+    kind: ModuleKind.posts,
+  );
+
+  static const List<SidebarModule> _debugModules = [
+    ..._baseModules,
+    _allPostsModule,
+  ];
+
+  /// Constant lists, so rebuilding the nav rail allocates nothing.
+  static List<SidebarModule> get modules =>
+      debugMode ? _debugModules : _baseModules;
 }

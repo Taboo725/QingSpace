@@ -12,19 +12,24 @@ enum SyncStatus { synced, outOfSync, unknown }
 
 /// Singleton that owns the active [RepoClient] and handles source selection.
 ///
-/// Call [init] at startup (after [GitHubClient.init] and [GiteeClient.init]).
-/// Use [setPreference] to persist and apply a new user preference.
+/// [init] is cheap and never blocks on the network: it reads the stored
+/// preference and, for `auto`, kicks off endpoint probing in the background.
+/// Callers that are about to issue a request should await [ready] (or use
+/// [readClient]) so the probe result is honoured for the very first fetch.
 class DataSourceManager {
   DataSourceManager._();
   static final DataSourceManager instance = DataSourceManager._();
 
   static const _prefKey = 'data_source';
+  static const _probeTimeout = Duration(seconds: 8);
+  static const _shaTimeout = Duration(seconds: 12);
 
   final _githubClient = GitHubRepoClient();
   final _giteeClient = GiteeRepoClient();
 
   DataSource _preference = DataSource.auto;
   DataSource _resolved = DataSource.github;
+  Future<void> _resolution = Future.value();
 
   /// Notifies listeners whenever the active source changes.
   final resolvedNotifier = ValueNotifier<DataSource>(DataSource.github);
@@ -36,13 +41,19 @@ class DataSourceManager {
   /// Write client — always GitHub, the single source of truth for all mutations.
   RepoClient get writeClient => _githubClient;
 
+  /// Completes once source resolution has settled. Safe to await repeatedly.
+  Future<void> get ready => _resolution;
+
+  /// [client], but only after resolution has settled.
+  Future<RepoClient> get readClient async {
+    await _resolution;
+    return client;
+  }
+
   DataSource get preference => _preference;
   DataSource get resolved => _resolved;
 
-  Map<String, String>? get imageHeaders =>
-      _resolved == DataSource.gitee
-          ? GiteeClient.imageHeaders
-          : _githubClient.imageHeaders;
+  Map<String, String>? get imageHeaders => client.imageHeaders;
 
   String rawUrl(String path) => client.rawUrl(path);
 
@@ -53,35 +64,50 @@ class DataSourceManager {
       (e) => e.name == saved,
       orElse: () => DataSource.auto,
     );
-    await _resolve();
+    // Apply the offline-decidable answer now so the first frame has a source,
+    // then refine in the background if the preference is `auto`.
+    _applyOfflineDefault();
+    _resolution = _resolve();
   }
 
   Future<void> setPreference(DataSource src) async {
     _preference = src;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefKey, src.name);
-    await _resolve();
+    _resolution = _resolve();
+    return _resolution;
+  }
+
+  void _applyOfflineDefault() {
+    _setResolved(
+      _preference == DataSource.gitee && GiteeClient.isConfigured
+          ? DataSource.gitee
+          : DataSource.github,
+    );
   }
 
   Future<void> _resolve() async {
-    final DataSource next;
     if (_preference == DataSource.auto) {
-      next = await _detectFaster();
-    } else if (_preference == DataSource.gitee && GiteeClient.isConfigured) {
-      next = DataSource.gitee;
+      _setResolved(await _detectFaster());
     } else {
-      next = DataSource.github;
+      _applyOfflineDefault();
     }
+  }
+
+  void _setResolved(DataSource next) {
+    if (_resolved == next) return;
     _resolved = next;
     resolvedNotifier.value = next;
     debugPrint('DataSourceManager: using ${next.name}');
   }
 
   /// Compares the branch HEAD commit SHA on both platforms.
-  /// Each request has a 12-second timeout and is resolved independently so a
-  /// slow GitHub connection does not block the Gitee result.
-  Future<({SyncStatus status, String? githubSha, String? giteeSha, String? error})>
-      checkSyncStatus() async {
+  /// Each request is resolved independently so a slow GitHub connection does
+  /// not hide the Gitee result.
+  Future<
+    ({SyncStatus status, String? githubSha, String? giteeSha, String? error})
+  >
+  checkSyncStatus() async {
     if (!GiteeClient.isConfigured) {
       return (
         status: SyncStatus.unknown,
@@ -91,52 +117,53 @@ class DataSourceManager {
       );
     }
 
-    String? githubSha;
-    String? giteeSha;
-    final errors = <String>[];
-
-    await Future.wait([
-      _githubClient
-          .getBranchHeadSha()
-          .timeout(const Duration(seconds: 12))
-          .then((sha) { githubSha = sha; })
-          .catchError((e) {
-        errors.add('GitHub unreachable');
-        debugPrint('getBranchHeadSha GitHub failed: $e');
-      }),
-      _giteeClient
-          .getBranchHeadSha()
-          .timeout(const Duration(seconds: 12))
-          .then((sha) { giteeSha = sha; })
-          .catchError((e) {
-        errors.add('Gitee unreachable');
-        debugPrint('getBranchHeadSha Gitee failed: $e');
-      }),
+    final results = await Future.wait([
+      _headSha(_githubClient, 'GitHub'),
+      _headSha(_giteeClient, 'Gitee'),
     ]);
+    final githubSha = results[0];
+    final giteeSha = results[1];
 
     if (githubSha != null && giteeSha != null) {
       return (
-        status: githubSha == giteeSha ? SyncStatus.synced : SyncStatus.outOfSync,
-        githubSha: githubSha!.substring(0, 7),
-        giteeSha: giteeSha!.substring(0, 7),
+        status: githubSha == giteeSha
+            ? SyncStatus.synced
+            : SyncStatus.outOfSync,
+        githubSha: _shortSha(githubSha),
+        giteeSha: _shortSha(giteeSha),
         error: null,
       );
     }
 
     return (
       status: SyncStatus.unknown,
-      githubSha: githubSha?.substring(0, 7),
-      giteeSha: giteeSha?.substring(0, 7),
-      error: errors.join(' · '),
+      githubSha: _shortSha(githubSha),
+      giteeSha: _shortSha(giteeSha),
+      error: [
+        if (githubSha == null) 'GitHub unreachable',
+        if (giteeSha == null) 'Gitee unreachable',
+      ].join(' · '),
     );
   }
+
+  Future<String?> _headSha(RepoClient client, String label) async {
+    try {
+      return await client.getBranchHeadSha().timeout(_shaTimeout);
+    } catch (e) {
+      debugPrint('getBranchHeadSha $label failed: $e');
+      return null;
+    }
+  }
+
+  static String? _shortSha(String? sha) =>
+      sha?.substring(0, sha.length < 7 ? sha.length : 7);
 
   /// Races both endpoints and returns whichever responds first.
   Future<DataSource> _detectFaster() async {
     if (!GiteeClient.isConfigured) return DataSource.github;
 
     final completer = Completer<DataSource>();
-    int failures = 0;
+    var failures = 0;
 
     void succeed(DataSource src) {
       if (!completer.isCompleted) completer.complete(src);
@@ -148,17 +175,20 @@ class DataSourceManager {
       }
     }
 
-    _githubClient.listDir('data').then(
-      (_) => succeed(DataSource.github),
-      onError: (_) => fail(),
+    // Deliberately not awaited: whichever probe answers first wins the race.
+    unawaited(
+      _githubClient
+          .listDir('data')
+          .then((_) => succeed(DataSource.github), onError: (_) => fail()),
     );
-    _giteeClient.listDir('data').then(
-      (_) => succeed(DataSource.gitee),
-      onError: (_) => fail(),
+    unawaited(
+      _giteeClient
+          .listDir('data')
+          .then((_) => succeed(DataSource.gitee), onError: (_) => fail()),
     );
 
     return completer.future.timeout(
-      const Duration(seconds: 8),
+      _probeTimeout,
       onTimeout: () => DataSource.github,
     );
   }

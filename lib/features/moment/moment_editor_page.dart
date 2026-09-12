@@ -1,10 +1,12 @@
-import '../../core/widgets/cdn_image.dart';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:intl/intl.dart';
+
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import '../../core/services/moment_service.dart';
+import '../../core/widgets/net_image.dart';
 import '../../models/moment.dart';
 
 class MomentsEditorPage extends StatefulWidget {
@@ -43,6 +45,12 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _contentController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -66,15 +74,13 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
   }
 
   Future<void> _pickImage() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-    );
-
-    if (result != null) {
-      setState(() {
-        _selectedImage = File(result.files.single.path!);
-      });
-    }
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final path = result?.files.single.path;
+    if (path == null) return;
+    setState(() {
+      _selectedImage = File(path);
+      _removeExistingImage = false;
+    });
   }
 
   Future<void> _submit() async {
@@ -94,7 +100,6 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
         _postDate.day,
         _postTime.hour,
         _postTime.minute,
-        0, // seconds
       );
 
       final moment = Moment(
@@ -121,6 +126,7 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
         Navigator.pop(context, true); // Return true to indicate success
       }
     } catch (e) {
+      debugPrint('Moment save failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -137,7 +143,7 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Moment'),
+        title: Text(widget.editMoment == null ? 'New Moment' : 'Edit Moment'),
         actions: [
           TextButton(
             onPressed: _isSubmitting ? null : _submit,
@@ -220,18 +226,11 @@ class _MomentsEditorPageState extends State<MomentsEditorPage> {
                           _showEmojiPicker = false;
                         });
                       },
-                      config: Config(
+                      config: const Config(
                         height: 300,
-                        checkPlatformCompatibility: true,
-                        viewOrderConfig: const ViewOrderConfig(),
                         emojiViewConfig: EmojiViewConfig(
-                          emojiSizeMax: 28,
                           columns: 9, // Keeping 9 for desktop constraint
                         ),
-                        skinToneConfig: const SkinToneConfig(),
-                        categoryViewConfig: const CategoryViewConfig(),
-                        bottomActionBarConfig: const BottomActionBarConfig(),
-                        searchViewConfig: const SearchViewConfig(),
                       ),
                     ),
                   ),

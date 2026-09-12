@@ -17,6 +17,7 @@ class GitHubRepoClient extends RepoClient {
     return 'https://raw.githubusercontent.com/${GitHubClient.user}/${GitHubClient.repo}/$branch/$encoded';
   }
 
+  @override
   Map<String, String>? get imageHeaders => GitHubClient.imageHeaders;
 
   @override
@@ -28,7 +29,9 @@ class GitHubRepoClient extends RepoClient {
   }
 
   @override
-  Future<({String sha, String base64Content})> getFileBase64(String path) async {
+  Future<({String sha, String base64Content})> getFileBase64(
+    String path,
+  ) async {
     final url = Uri.parse('$_base/contents/$path?ref=$branch');
     final res = await http.get(url, headers: GitHubClient.headers);
     if (res.statusCode != 200) throw RepoException(res.statusCode, res.body);
@@ -53,7 +56,11 @@ class GitHubRepoClient extends RepoClient {
       'branch': branch,
     };
     if (sha != null) body['sha'] = sha;
-    final res = await http.put(url, headers: GitHubClient.headers, body: jsonEncode(body));
+    final res = await http.put(
+      url,
+      headers: GitHubClient.headers,
+      body: jsonEncode(body),
+    );
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw RepoException(res.statusCode, res.body);
     }
@@ -70,6 +77,7 @@ class GitHubRepoClient extends RepoClient {
     if (res.statusCode != 200) throw RepoException(res.statusCode, res.body);
   }
 
+  @override
   Future<String> getBranchHeadSha() async {
     final url = Uri.parse('$_base/branches/$branch');
     final res = await http.get(url, headers: GitHubClient.headers);

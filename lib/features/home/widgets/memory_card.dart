@@ -1,10 +1,14 @@
-import '../../../core/widgets/cdn_image.dart';
-import '../../../core/widgets/fullscreen_photo_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:qing_space/core/services/memory_service.dart';
-import 'package:qing_space/core/config/app_config.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/services/memory_service.dart';
+import '../../../core/widgets/fullscreen_photo_page.dart';
+import '../../../core/widgets/net_image.dart';
 
+final DateFormat _dateFormat = DateFormat('yyyy.MM.dd');
+
+/// Surfaces one past moment or photo on the dashboard, preferring something
+/// recorded on today's date in an earlier year.
 class MemoryCard extends StatefulWidget {
   const MemoryCard({super.key});
 
@@ -33,30 +37,25 @@ class _MemoryCardState extends State<MemoryCard> {
   }
 
   Future<void> _loadMemory() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     final item = await _memoryService.getDailyMemory();
-    if (mounted) {
-      setState(() {
-        _item = item;
-        _isLoading = false;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _item = item;
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && _item == null) {
-      return const SizedBox.shrink();
-    }
+    final item = _item;
+    if (!_isLoading && item == null) return const SizedBox.shrink();
 
-    final isToday = _item?.isOnThisDay ?? false;
-    final title = _isLoading
-        ? "Memory Lane"
-        : (isToday ? "On This Day" : "Memory Lane");
-
+    final theme = Theme.of(context);
+    final isToday = item?.isOnThisDay ?? false;
     final accentColor = isToday
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).primaryColor;
+        ? theme.colorScheme.primary
+        : theme.primaryColor;
 
     return Center(
       child: ConstrainedBox(
@@ -69,7 +68,7 @@ class _MemoryCardState extends State<MemoryCard> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                color: theme.primaryColor.withValues(alpha: 0.1),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -79,155 +78,120 @@ class _MemoryCardState extends State<MemoryCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-                child: Row(
-                  children: [
-                    Icon(
-                      isToday
-                          ? Icons.calendar_today_rounded
-                          : Icons.history_edu_rounded,
-                      size: 16,
-                      color: accentColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      title.toUpperCase(),
-                      style: TextStyle(
-                        fontFamily: 'Source Han Serif CN',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: accentColor,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (!_isLoading && _item!.date != null)
-                      Text(
-                        DateFormat('yyyy.MM.dd').format(_item!.date!),
-                        style: TextStyle(
-                          fontFamily: 'Source Han Serif CN',
-                          fontSize: 12,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              _buildHeader(isToday, accentColor, item),
               if (_isLoading)
                 const Padding(
-                  padding: EdgeInsets.all(32.0),
+                  padding: EdgeInsets.all(32),
                   child: Center(child: CircularProgressIndicator()),
-                ),
-              if (!_isLoading) ...[
-                if (_item!.imageUrl != null && _item!.imageUrl!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxHeight: 600,
-                          minHeight: 200,
-                        ),
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => FullscreenPhotoPage(
-                                  imageUrl: _item!.imageUrl!,
-                                  heroTag: _item!.imageUrl!,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Hero(
-                            tag: _item!.imageUrl!,
-                            child: NetImage(
-                              borderRadius: BorderRadius.circular(24),
-                              imageUrl: _item!.imageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                height: 200,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: const Center(
-                                  child: Icon(
-                                    Icons.image,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) {
-                                debugPrint(
-                                  "Image failed to load: $url, error: $error",
-                                );
-                                return Container(
-                                  height: 200,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.broken_image,
-                                        color: Colors.grey,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        "图片加载失败",
-                                        style: TextStyle(
-                                          color: Colors.grey[500],
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                if (_item!.content.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 20,
-                    ),
-                    child: Text(
-                      _item!.content,
-                      style: TextStyle(
-                        fontFamily: 'Source Han Serif CN',
-                        fontSize: 15,
-                        height: 1.6,
-                        color: Colors.grey[800],
-                      ),
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-
-                if (_item!.content.isEmpty &&
-                    (_item!.imageUrl == null || _item!.imageUrl!.isEmpty))
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text("这篇记忆没有内容"),
-                  ),
-              ],
+                )
+              else
+                ..._buildContent(item!),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildHeader(bool isToday, Color accentColor, MemoryItem? item) {
+    final date = item?.date;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      child: Row(
+        children: [
+          Icon(
+            isToday ? Icons.calendar_today_rounded : Icons.history_edu_rounded,
+            size: 16,
+            color: accentColor,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            isToday ? 'ON THIS DAY' : 'MEMORY LANE',
+            style: TextStyle(
+              fontFamily: 'Source Han Serif CN',
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
+              letterSpacing: 1,
+            ),
+          ),
+          const Spacer(),
+          if (date != null)
+            Text(
+              _dateFormat.format(date),
+              style: TextStyle(
+                fontFamily: 'Source Han Serif CN',
+                fontSize: 12,
+                color: Colors.grey[400],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildContent(MemoryItem item) {
+    final imageUrl = item.imageUrl;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+
+    if (!hasImage && item.content.isEmpty) {
+      return const [
+        Padding(padding: EdgeInsets.all(20), child: Text('这篇记忆没有内容')),
+      ];
+    }
+
+    return [
+      if (hasImage)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 600, minHeight: 200),
+              child: GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => FullscreenPhotoPage(
+                      imageUrl: imageUrl,
+                      heroTag: imageUrl,
+                    ),
+                  ),
+                ),
+                child: Hero(
+                  tag: imageUrl,
+                  child: NetImage(
+                    imageUrl: imageUrl,
+                    borderRadius: BorderRadius.circular(24),
+                    fit: BoxFit.cover,
+                    // Capped at 800 logical px wide; 1600 covers 2x displays.
+                    memCacheWidth: 1600,
+                    placeholder: (_, _) => ImageLoadingBox(
+                      borderRadius: BorderRadius.circular(24),
+                      showSpinner: false,
+                    ),
+                    errorWidget: (_, _, _) =>
+                        const ImageErrorBox(height: 200, compact: true),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      if (item.content.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Text(
+            item.content,
+            style: TextStyle(
+              fontFamily: 'Source Han Serif CN',
+              fontSize: 15,
+              height: 1.6,
+              color: Colors.grey[800],
+            ),
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+    ];
   }
 }

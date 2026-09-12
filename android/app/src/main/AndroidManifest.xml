@@ -37,6 +37,10 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Lets the in-app updater open a downloaded APK with the system package
+         installer. The user still has to grant "install unknown apps" for
+         QingSpace and confirm the install; nothing happens silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

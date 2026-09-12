@@ -1,14 +1,21 @@
 import 'package:lunar/lunar.dart';
 import '../config/app_config.dart';
+import '../utils/lunar_labels.dart';
 import 'couple_config.dart';
 
+/// What an upcoming event represents, so the UI can pick an icon and greeting
+/// without pattern-matching on the display title.
+enum AnniversaryKind { birthday, valentines, qixi, hundredDay, yearly }
+
 class AnniversaryEvent {
+  final AnniversaryKind kind;
   final String title;
   final DateTime date;
   final String description;
   final bool isToday;
 
-  AnniversaryEvent({
+  const AnniversaryEvent({
+    required this.kind,
     required this.title,
     required this.date,
     required this.description,
@@ -17,17 +24,19 @@ class AnniversaryEvent {
 
   int get daysUntil {
     if (isToday) return 0;
-    final now = AppConfig.effectiveNow;
-    final today = DateTime(now.year, now.month, now.day);
-    final d = DateTime(date.year, date.month, date.day);
-    return d.difference(today).inDays;
+    final today = _dateOnly(AppConfig.effectiveNow);
+    return _dateOnly(date).difference(today).inDays;
   }
 }
 
+/// Builds the couple's upcoming anniversaries, birthdays and festivals,
+/// soonest first. Returns an empty list until a start date has been set.
 class CountdownService {
+  const CountdownService();
+
   List<AnniversaryEvent> getUpcomingEvents() {
     final startDate = CoupleConfig.startDate;
-    if (startDate == null) return [];
+    if (startDate == null) return const [];
 
     final now = AppConfig.effectiveNow;
     final today = _dateOnly(now);
@@ -37,48 +46,78 @@ class CountdownService {
 
     final events = <AnniversaryEvent>[
       if (CoupleConfig.hasP1Birthday)
-        _gregorianEvent(
-          p1.isNotEmpty ? "$p1's Birthday" : 'Your Birthday',
-          CoupleConfig.p1BdMonth,
-          CoupleConfig.p1BdDay,
-          '${CoupleConfig.p1BdMonth.toString().padLeft(2, '0')}/${CoupleConfig.p1BdDay.toString().padLeft(2, '0')}',
-          today,
+        _gregorian(
+          kind: AnniversaryKind.birthday,
+          title: p1.isNotEmpty ? "$p1's Birthday" : 'Your Birthday',
+          month: CoupleConfig.p1BdMonth,
+          day: CoupleConfig.p1BdDay,
+          description: _mmdd(CoupleConfig.p1BdMonth, CoupleConfig.p1BdDay),
+          today: today,
         ),
       if (CoupleConfig.hasP2Birthday)
-        _gregorianEvent(
-          p2.isNotEmpty ? "$p2's Birthday" : "Partner's Birthday",
-          CoupleConfig.p2BdMonth,
-          CoupleConfig.p2BdDay,
-          '${CoupleConfig.p2BdMonth.toString().padLeft(2, '0')}/${CoupleConfig.p2BdDay.toString().padLeft(2, '0')}',
-          today,
+        _gregorian(
+          kind: AnniversaryKind.birthday,
+          title: p2.isNotEmpty ? "$p2's Birthday" : "Partner's Birthday",
+          month: CoupleConfig.p2BdMonth,
+          day: CoupleConfig.p2BdDay,
+          description: _mmdd(CoupleConfig.p2BdMonth, CoupleConfig.p2BdDay),
+          today: today,
         ),
       if (CoupleConfig.hasP1LunarBirthday)
-        _lunarEvent(
-          p1.isNotEmpty ? "$p1's Birthday (Lunar)" : 'Your Birthday (Lunar)',
-          CoupleConfig.p1LunarBdMonth,
-          CoupleConfig.p1LunarBdDay,
-          '农历${_lunarMonthLabel(CoupleConfig.p1LunarBdMonth)}${_lunarDayLabel(CoupleConfig.p1LunarBdDay)}',
-          today,
-          now,
+        _lunar(
+          kind: AnniversaryKind.birthday,
+          title: p1.isNotEmpty
+              ? "$p1's Birthday (Lunar)"
+              : 'Your Birthday (Lunar)',
+          lunarMonth: CoupleConfig.p1LunarBdMonth,
+          lunarDay: CoupleConfig.p1LunarBdDay,
+          description: LunarLabels.full(
+            CoupleConfig.p1LunarBdMonth,
+            CoupleConfig.p1LunarBdDay,
+          ),
+          today: today,
+          now: now,
         ),
       if (CoupleConfig.hasP2LunarBirthday)
-        _lunarEvent(
-          p2.isNotEmpty ? "$p2's Birthday (Lunar)" : "Partner's Birthday (Lunar)",
-          CoupleConfig.p2LunarBdMonth,
-          CoupleConfig.p2LunarBdDay,
-          '农历${_lunarMonthLabel(CoupleConfig.p2LunarBdMonth)}${_lunarDayLabel(CoupleConfig.p2LunarBdDay)}',
-          today,
-          now,
+        _lunar(
+          kind: AnniversaryKind.birthday,
+          title: p2.isNotEmpty
+              ? "$p2's Birthday (Lunar)"
+              : "Partner's Birthday (Lunar)",
+          lunarMonth: CoupleConfig.p2LunarBdMonth,
+          lunarDay: CoupleConfig.p2LunarBdDay,
+          description: LunarLabels.full(
+            CoupleConfig.p2LunarBdMonth,
+            CoupleConfig.p2LunarBdDay,
+          ),
+          today: today,
+          now: now,
         ),
-      _gregorianEvent("Valentine's Day", 2, 14, '02/14', today),
-      _lunarEvent('七夕', 7, 7, '农历七月初七', today, now),
-      _hundredDayEvent(today, startDate),
-      _gregorianEvent(
-        'Yearly Anniversary',
-        startDate.month,
-        startDate.day,
-        '${startDate.month.toString().padLeft(2, '0')}/${startDate.day.toString().padLeft(2, '0')}',
-        today,
+      _gregorian(
+        kind: AnniversaryKind.valentines,
+        title: "Valentine's Day",
+        month: 2,
+        day: 14,
+        description: '02/14',
+        today: today,
+      ),
+      _lunar(
+        kind: AnniversaryKind.qixi,
+        title: '七夕',
+        lunarMonth: 7,
+        lunarDay: 7,
+        description: '农历七月初七',
+        today: today,
+        now: now,
+      ),
+      _hundredDay(today, startDate),
+      _gregorian(
+        kind: AnniversaryKind.yearly,
+        title: 'Yearly Anniversary',
+        month: startDate.month,
+        day: startDate.day,
+        description: _mmdd(startDate.month, startDate.day),
+        today: today,
       ),
     ];
 
@@ -86,75 +125,76 @@ class CountdownService {
     return events;
   }
 
-  AnniversaryEvent _gregorianEvent(
-    String title,
-    int month,
-    int day,
-    String description,
-    DateTime today,
-  ) {
+  AnniversaryEvent _gregorian({
+    required AnniversaryKind kind,
+    required String title,
+    required int month,
+    required int day,
+    required String description,
+    required DateTime today,
+  }) {
     var date = DateTime(today.year, month, day);
-    if (date.isBefore(today) && !_sameDay(date, today)) {
-      date = DateTime(today.year + 1, month, day);
-    }
+    if (date.isBefore(today)) date = DateTime(today.year + 1, month, day);
     return AnniversaryEvent(
+      kind: kind,
       title: title,
       date: date,
       description: description,
-      isToday: _sameDay(date, today),
+      isToday: date == today,
     );
   }
 
-  AnniversaryEvent _lunarEvent(
-    String title,
-    int lunarMonth,
-    int lunarDay,
-    String description,
-    DateTime today,
-    DateTime now,
-  ) {
+  AnniversaryEvent _lunar({
+    required AnniversaryKind kind,
+    required String title,
+    required int lunarMonth,
+    required int lunarDay,
+    required String description,
+    required DateTime today,
+    required DateTime now,
+  }) {
     final lunarYear = Lunar.fromDate(now).getYear();
-    DateTime date = _lunarToSolar(lunarYear, lunarMonth, lunarDay);
-    if (date.isBefore(today) && !_sameDay(date, today)) {
+    var date = _lunarToSolar(lunarYear, lunarMonth, lunarDay);
+    if (date.isBefore(today)) {
       date = _lunarToSolar(lunarYear + 1, lunarMonth, lunarDay);
     }
     return AnniversaryEvent(
+      kind: kind,
       title: title,
       date: date,
       description: description,
-      isToday: _sameDay(date, today),
+      isToday: date == today,
     );
   }
 
-  AnniversaryEvent _hundredDayEvent(DateTime today, DateTime startDate) {
+  /// The next round-hundred day count since [startDate], counting day one as
+  /// the start date itself.
+  AnniversaryEvent _hundredDay(DateTime today, DateTime startDate) {
     final dayCount = today.difference(_dateOnly(startDate)).inDays + 1;
-    final nextFactor = (dayCount / 100).ceil().clamp(1, 9999);
-    final targetDay = nextFactor * 100;
-    final date = startDate.add(Duration(days: targetDay - 1));
+    final targetDay = (dayCount / 100).ceil().clamp(1, 9999) * 100;
+    // Calendar arithmetic rather than Duration, so a DST boundary cannot
+    // shift the result back by an hour and land on the previous day.
+    final date = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day + targetDay - 1,
+    );
     return AnniversaryEvent(
+      kind: AnniversaryKind.hundredDay,
       title: '$targetDay-Day Anniversary',
       date: date,
       description: 'Celebrating $targetDay days',
-      isToday: _sameDay(date, today),
+      isToday: date == today,
     );
   }
 
-  DateTime _lunarToSolar(int year, int month, int day) {
+  static DateTime _lunarToSolar(int year, int month, int day) {
     final solar = Lunar.fromYmd(year, month, day).getSolar();
     return DateTime(solar.getYear(), solar.getMonth(), solar.getDay());
   }
 
-  static DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
-  static bool _sameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
-
-  static const _lunarMonths = ['', '正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
-  static const _lunarDays = ['', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-    '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-    '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
-
-  static String _lunarMonthLabel(int m) =>
-      (m >= 1 && m <= 12) ? '${_lunarMonths[m]}月' : '$m月';
-  static String _lunarDayLabel(int d) =>
-      (d >= 1 && d <= 30) ? _lunarDays[d] : '$d日';
+  static String _mmdd(int month, int day) =>
+      '${month.toString().padLeft(2, '0')}/${day.toString().padLeft(2, '0')}';
 }
+
+DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);

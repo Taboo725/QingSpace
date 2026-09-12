@@ -1,28 +1,19 @@
 import 'dart:convert';
-import 'package:intl/intl.dart';
-import '../../models/moment.dart';
 
-// Helper to serialize moments to YAML string
-String momentsToYamlString(List<Moment> moments) {
-  final buffer = StringBuffer();
-  for (var moment in moments) {
-    buffer.writeln('-');
-    // Date
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(moment.date);
-    buffer.writeln('  date: $dateStr');
+/// Encodes [value] as a YAML scalar that round-trips through any YAML parser.
+///
+/// JSON string syntax is a subset of YAML's double-quoted style, so delegating
+/// to [jsonEncode] gives correct escaping for quotes, backslashes, newlines and
+/// emoji without hand-rolling an escaper.
+String yamlScalar(String value) => jsonEncode(value);
 
-    // Content - use JSON encode to handle escaping
-    buffer.writeln('  content: ${jsonEncode(moment.content)}');
+/// Formats [date] as an unquoted `yyyy-MM-dd HH:mm:ss` YAML timestamp.
+String yamlTimestamp(DateTime date) =>
+    '${_pad(date.year, 4)}-${_pad(date.month)}-${_pad(date.day)} '
+    '${_pad(date.hour)}:${_pad(date.minute)}:${_pad(date.second)}';
 
-    // Image
-    if (moment.image != null && moment.image!.isNotEmpty) {
-      buffer.writeln('  image: "${moment.image}"');
-    }
+/// Formats [date] as an unquoted `yyyy-MM-dd` YAML date.
+String yamlDate(DateTime date) =>
+    '${_pad(date.year, 4)}-${_pad(date.month)}-${_pad(date.day)}';
 
-    // Mood
-    if (moment.mood != null && moment.mood!.isNotEmpty) {
-      buffer.writeln('  mood: "${moment.mood}"');
-    }
-  }
-  return buffer.toString();
-}
+String _pad(int value, [int width = 2]) => value.toString().padLeft(width, '0');

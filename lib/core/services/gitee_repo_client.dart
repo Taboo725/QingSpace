@@ -18,6 +18,9 @@ class GiteeRepoClient extends RepoClient {
     );
   }
 
+  @override
+  Map<String, String>? get imageHeaders => GiteeClient.imageHeaders;
+
   String get _base =>
       'https://gitee.com/api/v5/repos/${GiteeClient.user}/${GiteeClient.repo}';
 
@@ -43,7 +46,9 @@ class GiteeRepoClient extends RepoClient {
   }
 
   @override
-  Future<({String sha, String base64Content})> getFileBase64(String path) async {
+  Future<({String sha, String base64Content})> getFileBase64(
+    String path,
+  ) async {
     _log('getFile', path);
     final url = Uri.parse(
       GiteeClient.appendToken('$_base/contents/$path?ref=$branch'),
@@ -77,9 +82,17 @@ class GiteeRepoClient extends RepoClient {
     final http.Response res;
     if (sha != null) {
       body['sha'] = sha;
-      res = await http.put(url, headers: GiteeClient.writeHeaders, body: jsonEncode(body));
+      res = await http.put(
+        url,
+        headers: GiteeClient.writeHeaders,
+        body: jsonEncode(body),
+      );
     } else {
-      res = await http.post(url, headers: GiteeClient.writeHeaders, body: jsonEncode(body));
+      res = await http.post(
+        url,
+        headers: GiteeClient.writeHeaders,
+        body: jsonEncode(body),
+      );
     }
 
     if (res.statusCode != 200 && res.statusCode != 201) {
@@ -98,6 +111,7 @@ class GiteeRepoClient extends RepoClient {
     if (res.statusCode != 200) throw RepoException(res.statusCode, res.body);
   }
 
+  @override
   Future<String> getBranchHeadSha() async {
     final url = Uri.parse(
       GiteeClient.appendToken('$_base/commits?sha=$branch&limit=1'),

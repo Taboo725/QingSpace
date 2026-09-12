@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../core/services/couple_config.dart';
-import '../widgets/days_counter.dart';
 import '../widgets/countdown_card.dart';
+import '../widgets/days_counter.dart';
 import '../widgets/memory_card.dart';
 
 class DashboardPage extends StatelessWidget {

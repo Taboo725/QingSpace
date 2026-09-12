@@ -62,8 +62,10 @@ class CoupleConfig {
 
   static bool get hasP1Birthday => _p1BdMonth > 0 && _p1BdDay > 0;
   static bool get hasP2Birthday => _p2BdMonth > 0 && _p2BdDay > 0;
-  static bool get hasP1LunarBirthday => _p1LunarBdMonth > 0 && _p1LunarBdDay > 0;
-  static bool get hasP2LunarBirthday => _p2LunarBdMonth > 0 && _p2LunarBdDay > 0;
+  static bool get hasP1LunarBirthday =>
+      _p1LunarBdMonth > 0 && _p1LunarBdDay > 0;
+  static bool get hasP2LunarBirthday =>
+      _p2LunarBdMonth > 0 && _p2LunarBdDay > 0;
 
   static int get p1BdYear => _p1BdYear;
   static int get p1BdMonth => _p1BdMonth;

@@ -1,5 +1,5 @@
 name: qing_space
-description: "A new Flutter project."
+description: "QingSpace — a private space for two, with a GitHub repository as its backend."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+5  # single source of truth; read at runtime via AppInfo
 
 environment:
   sdk: ^3.10.7
@@ -31,9 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   http: ^1.6.0
   flutter_markdown: ^0.7.7+1
   provider: ^6.1.5+1
@@ -41,7 +38,6 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.5.4
   cached_network_image: ^3.4.1
-  animations: ^2.1.1
   flutter_animate: ^4.5.2
   file_picker: ^10.3.10
   path: ^1.9.1
@@ -53,6 +49,13 @@ dependencies:
   markdown: ^7.3.0
   font_awesome_flutter: ^10.8.0
 
+  # In-app updater: read the running version, download the release asset,
+  # hand it to the OS installer (Android) or open the release page (desktop).
+  package_info_plus: ^9.0.0
+  path_provider: ^2.1.5
+  open_filex: ^4.7.0
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -63,6 +66,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Fans assets/icon/ out to every platform. Run:
+  #   dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -78,6 +85,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/fonts/
+    - assets/icon/icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -90,13 +98,12 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
+  # Only the weights the UI actually asks for are bundled. Each CJK weight is
+  # ~10 MB, so shipping unused ones is pure download cost: ExtraLight (200) and
+  # Light (300) were dropped because nothing requests them.
   fonts:
     - family: Source Han Serif CN
       fonts:
-        - asset: assets/fonts/SourceHanSerifCN-ExtraLight.otf
-          weight: 200
-        - asset: assets/fonts/SourceHanSerifCN-Light.otf
-          weight: 300
         - asset: assets/fonts/SourceHanSerifCN-Regular.otf
           weight: 400
         - asset: assets/fonts/SourceHanSerifCN-Medium.otf
@@ -111,3 +118,25 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# App icon generation. The masters in assets/icon/ are produced by
+# tool/generate_icon.py; this fans them out to each platform's native format.
+flutter_launcher_icons:
+  image_path: assets/icon/icon.png
+  android: true
+  adaptive_icon_background: assets/icon/icon_background.png
+  adaptive_icon_foreground: assets/icon/icon_foreground.png
+  ios: true
+  remove_alpha_ios: true
+  windows:
+    generate: true
+    image_path: assets/icon/icon.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/icon/icon.png
+  web:
+    generate: true
+    image_path: assets/icon/icon.png
+    background_color: "#F2778F"
+    theme_color: "#F2778F"

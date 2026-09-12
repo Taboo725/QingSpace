@@ -1,10 +1,12 @@
 import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:file_picker/file_picker.dart';
+
 import '../../core/services/couple_config.dart';
-import '../../core/services/github_service.dart';
 import '../../core/services/data_source_manager.dart';
+import '../../core/services/github_service.dart';
 import '../../core/utils/frontmatter_parser.dart';
 
 class _EditorImage {
@@ -22,7 +24,8 @@ class _EditorImage {
     this.originalPath,
   });
 
-  _EditorImage copyWith({String? fullPath, String? originalPath}) => _EditorImage(
+  _EditorImage copyWith({String? fullPath, String? originalPath}) =>
+      _EditorImage(
         id: id,
         fullPath: fullPath ?? this.fullPath,
         isPending: isPending,
@@ -34,13 +37,11 @@ class _EditorImage {
 class PostEditorPage extends StatefulWidget {
   final String? existingFileName;
   final String? existingContent;
-  final String? existingSha;
 
   const PostEditorPage({
     super.key,
     this.existingFileName,
     this.existingContent,
-    this.existingSha,
   });
 
   @override
@@ -50,6 +51,7 @@ class PostEditorPage extends StatefulWidget {
 class _PostEditorPageState extends State<PostEditorPage> {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
+  final _idController = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   DateTime _date = DateTime.now();
@@ -80,9 +82,18 @@ class _PostEditorPageState extends State<PostEditorPage> {
 
   @override
   void dispose() {
+    _bodyController.removeListener(_onBodyChanged);
     _titleController.dispose();
     _bodyController.dispose();
+    _idController.dispose();
     super.dispose();
+  }
+
+  /// Keeps the settings-drawer field in step with [_id] without clobbering the
+  /// caret while the user is typing in it.
+  void _syncIdController() {
+    final text = _id?.toString() ?? '';
+    if (_idController.text != text) _idController.text = text;
   }
 
   void _onBodyChanged() {
@@ -91,7 +102,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
     final pos = _bodyController.selection.baseOffset;
 
     final pattern = RegExp(
-      r'!\[.*?\]\(/images/posts/' + RegExp.escape('$_id') + r'-([a-zA-Z0-9]+)\.\w+\)',
+      r'!\[.*?\]\(/images/posts/' +
+          RegExp.escape('$_id') +
+          r'-([a-zA-Z0-9]+)\.\w+\)',
       caseSensitive: false,
     );
     String? highlight;
@@ -119,14 +132,17 @@ class _PostEditorPageState extends State<PostEditorPage> {
         (e) => e.id == imgId,
         orElse: () => _EditorImage(
           id: imgId,
-          fullPath: '/images/posts/$_id-$imgId.${m.group(0)!.split('.').last.replaceAll(')', '')}',
+          fullPath:
+              '/images/posts/$_id-$imgId.${m.group(0)!.split('.').last.replaceAll(')', '')}',
           isPending: false,
         ),
       );
       newOrder.add(existing);
     }
     if (newOrder.length != _images.length ||
-        Iterable.generate(newOrder.length).any((i) => newOrder[i].id != _images[i].id)) {
+        Iterable.generate(
+          newOrder.length,
+        ).any((i) => newOrder[i].id != _images[i].id)) {
       setState(() {
         _images
           ..clear()
@@ -148,22 +164,30 @@ class _PostEditorPageState extends State<PostEditorPage> {
 
     final rawDate = meta['date']?.toString() ?? '';
     if (rawDate.isNotEmpty) {
-      try { _date = DateTime.parse(rawDate); } catch (_) {}
+      try {
+        _date = DateTime.parse(rawDate);
+      } catch (_) {}
     }
 
     const knownKeys = {'title', 'date', 'category', 'tags', 'id', 'author'};
     _customProps = {
       for (final e in meta.entries)
-        if (!knownKeys.contains(e.key.toLowerCase()))
-          e.key: e.value.toString(),
+        if (!knownKeys.contains(e.key.toLowerCase())) e.key: e.value.toString(),
     };
 
+    _syncIdController();
+
     if (_id == null && widget.existingFileName != null) {
-      final name = widget.existingFileName!.split('/').last.replaceAll('.md', '');
+      final name = widget.existingFileName!
+          .split('/')
+          .last
+          .replaceAll('.md', '');
       final m = RegExp(r'^(\d{4}-\d{2}-\d{2})-(.*)').firstMatch(name);
       if (m != null) {
         _titleController.text = m.group(2)!;
-        try { _date = DateTime.parse(m.group(1)!); } catch (_) {}
+        try {
+          _date = DateTime.parse(m.group(1)!);
+        } catch (_) {}
       } else {
         _titleController.text = name;
       }
@@ -176,31 +200,43 @@ class _PostEditorPageState extends State<PostEditorPage> {
     if (_id == null) return;
     _images.clear();
     final pattern = RegExp(
-      r'!\[.*?\]\(/images/posts/' + RegExp.escape('$_id') + r'-([a-zA-Z0-9]+)\.(\w+)\)',
+      r'!\[.*?\]\(/images/posts/' +
+          RegExp.escape('$_id') +
+          r'-([a-zA-Z0-9]+)\.(\w+)\)',
       caseSensitive: false,
     );
     for (final m in pattern.allMatches(_bodyController.text)) {
       final imgId = m.group(1)!;
       final ext = m.group(2)!;
-      _images.add(_EditorImage(
-        id: imgId,
-        fullPath: '/images/posts/$_id-$imgId.$ext',
-        isPending: false,
-      ));
+      _images.add(
+        _EditorImage(
+          id: imgId,
+          fullPath: '/images/posts/$_id-$imgId.$ext',
+          isPending: false,
+        ),
+      );
     }
   }
 
+  /// Suggests the next post id. Only the directory listing is needed, so this
+  /// must not pull every post body down.
   Future<void> _fetchNextId() async {
     try {
-      final files = await context.read<GithubService>().fetchFiles();
-      if (mounted) setState(() => _id = files.length + 1);
+      final count = await context.read<GithubService>().countPosts();
+      if (mounted) {
+        setState(() {
+          _id = count + 1;
+          _syncIdController();
+        });
+      }
     } catch (_) {}
   }
 
   Future<void> _save() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请填写标题')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请填写标题')));
       return;
     }
 
@@ -211,7 +247,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
       // Delete removed images
       for (final path in _pendingDeletes) {
         try {
-          await service.deleteFileByPath('images/posts/${path.split('/').last}');
+          await service.deleteFileByPath(
+            'images/posts/${path.split('/').last}',
+          );
         } catch (e) {
           debugPrint('Delete failed for $path: $e');
         }
@@ -220,24 +258,31 @@ class _PostEditorPageState extends State<PostEditorPage> {
       // Upload new images
       for (final img in _images) {
         if (img.isPending && img.pendingBytes != null) {
-          await service.uploadImage(img.fullPath.split('/').last, img.pendingBytes!);
+          await service.uploadImage(
+            img.fullPath.split('/').last,
+            img.pendingBytes!,
+          );
         }
       }
 
       final content = _buildContent();
       final safeTitle = _titleController.text.trim().replaceAll(
-        RegExp(r'[<>:"/\\|?*]'), '');
+        RegExp(r'[<>:"/\\|?*]'),
+        '',
+      );
 
       if (_isEditing) {
         final oldName = widget.existingFileName!.split('/').last;
-        final prefix = RegExp(r'^(\d{4}-\d{2}-\d{2}-)').firstMatch(oldName)?.group(1) ?? '';
+        final prefix =
+            RegExp(r'^(\d{4}-\d{2}-\d{2}-)').firstMatch(oldName)?.group(1) ??
+            '';
         final newName = '$prefix$safeTitle.md';
 
         if (newName != oldName) {
           await service.createFile(newName, content);
-          await service.deleteFile(widget.existingFileName!, widget.existingSha!);
+          await service.deleteFile(widget.existingFileName!);
         } else {
-          await service.updateFile(widget.existingFileName!, content, widget.existingSha!);
+          await service.updateFile(widget.existingFileName!, content);
         }
       } else {
         await service.createFile('$safeTitle.md', content);
@@ -246,8 +291,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -278,8 +324,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
 
   Future<void> _pickImage() async {
     if (_id == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Wait for ID...')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Wait for ID...')));
       return;
     }
 
@@ -316,8 +363,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('图片插入失败，请重试')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('图片插入失败，请重试')));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -343,8 +391,10 @@ class _PostEditorPageState extends State<PostEditorPage> {
       key: _scaffoldKey,
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(_id != null ? 'Post #$_id' : 'New Post',
-            style: const TextStyle(color: Colors.black, fontSize: 16)),
+        title: Text(
+          _id != null ? 'Post #$_id' : 'New Post',
+          style: const TextStyle(color: Colors.black, fontSize: 16),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -372,12 +422,16 @@ class _PostEditorPageState extends State<PostEditorPage> {
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Icon(Icons.send_rounded, size: 18),
               label: const Text('Publish'),
               style: FilledButton.styleFrom(
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
           ),
@@ -395,7 +449,10 @@ class _PostEditorPageState extends State<PostEditorPage> {
                 child: TextField(
                   controller: _titleController,
                   style: const TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.bold, height: 1.3),
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    height: 1.3,
+                  ),
                   decoration: const InputDecoration(
                     hintText: 'Enter title...',
                     border: InputBorder.none,
@@ -411,7 +468,10 @@ class _PostEditorPageState extends State<PostEditorPage> {
                   child: TextField(
                     controller: _bodyController,
                     style: const TextStyle(
-                        fontSize: 16, height: 1.6, color: Colors.black87),
+                      fontSize: 16,
+                      height: 1.6,
+                      color: Colors.black87,
+                    ),
                     decoration: const InputDecoration(
                       hintText: 'Start writing your story...',
                       border: InputBorder.none,
@@ -454,8 +514,10 @@ class _PostEditorPageState extends State<PostEditorPage> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: img.isPending && img.pendingBytes != null
-                    ? Image.memory(Uint8List.fromList(img.pendingBytes!),
-                        fit: BoxFit.cover)
+                    ? Image.memory(
+                        Uint8List.fromList(img.pendingBytes!),
+                        fit: BoxFit.cover,
+                      )
                     : Image.network(
                         DataSourceManager.instance.rawUrl(img.fullPath),
                         headers: DataSourceManager.instance.imageHeaders,
@@ -471,9 +533,15 @@ class _PostEditorPageState extends State<PostEditorPage> {
                   onTap: () => _removeImage(i),
                   child: Container(
                     decoration: const BoxDecoration(
-                        color: Colors.black54, shape: BoxShape.circle),
+                      color: Colors.black54,
+                      shape: BoxShape.circle,
+                    ),
                     padding: const EdgeInsets.all(4),
-                    child: const Icon(Icons.close, color: Colors.white, size: 12),
+                    child: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 12,
+                    ),
                   ),
                 ),
               ),
@@ -484,9 +552,11 @@ class _PostEditorPageState extends State<PostEditorPage> {
                 child: Container(
                   color: Colors.black45,
                   padding: const EdgeInsets.all(2),
-                  child: Text('#${i + 1}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, fontSize: 10)),
+                  child: Text(
+                    '#${i + 1}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 10),
+                  ),
                 ),
               ),
             ],
@@ -510,9 +580,10 @@ class _PostEditorPageState extends State<PostEditorPage> {
               children: [
                 Icon(Icons.tune, size: 20),
                 SizedBox(width: 12),
-                Text('Post Settings',
-                    style:
-                        TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                Text(
+                  'Post Settings',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
@@ -525,26 +596,32 @@ class _PostEditorPageState extends State<PostEditorPage> {
                   decoration: InputDecoration(
                     hintText: 'Post ID',
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                   ),
                   keyboardType: TextInputType.number,
-                  controller: TextEditingController(text: _id?.toString() ?? ''),
+                  controller: _idController,
                   onChanged: (val) {
                     final newId = int.tryParse(val);
                     if (newId != null && _id != null && newId != _id) {
                       final oldPattern = '/images/posts/$_id-';
                       final newPattern = '/images/posts/$newId-';
                       if (_bodyController.text.contains(oldPattern)) {
-                        _bodyController.text = _bodyController.text
-                            .replaceAll(oldPattern, newPattern);
+                        _bodyController.text = _bodyController.text.replaceAll(
+                          oldPattern,
+                          newPattern,
+                        );
                       }
                       for (var i = 0; i < _images.length; i++) {
                         final img = _images[i];
                         final suffix = img.fullPath.split('-').last;
                         _images[i] = img.copyWith(
-                            fullPath: '/images/posts/$newId-$suffix');
+                          fullPath: '/images/posts/$newId-$suffix',
+                        );
                       }
                     }
                     setState(() => _id = newId);
@@ -566,7 +643,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey[300]!),
                       borderRadius: BorderRadius.circular(12),
@@ -578,8 +657,11 @@ class _PostEditorPageState extends State<PostEditorPage> {
                           '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
                           style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
-                        const Icon(Icons.calendar_today_rounded,
-                            size: 16, color: Colors.grey),
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
                       ],
                     ),
                   ),
@@ -607,7 +689,8 @@ class _PostEditorPageState extends State<PostEditorPage> {
                       ),
                       backgroundColor: Colors.grey[100],
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       side: BorderSide.none,
                       checkmarkColor: Colors.white,
                     );
@@ -622,31 +705,35 @@ class _PostEditorPageState extends State<PostEditorPage> {
                       .where((n) => n.isNotEmpty)
                       .toList()
                       .map((author) {
-                    final selected = _authors.contains(author);
-                    return FilterChip(
-                      label: Text(author),
-                      selected: selected,
-                      onSelected: (s) => setState(() {
-                        if (s) {
-                          if (!_authors.contains(author)) _authors.add(author);
-                        } else {
-                          _authors.remove(author);
-                        }
-                      }),
-                      selectedColor: Colors.black,
-                      labelStyle: TextStyle(
-                        color: selected ? Colors.white : Colors.black87,
-                        fontWeight: selected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      backgroundColor: Colors.grey[100],
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      side: BorderSide.none,
-                      checkmarkColor: Colors.white,
-                    );
-                  }).toList(),
+                        final selected = _authors.contains(author);
+                        return FilterChip(
+                          label: Text(author),
+                          selected: selected,
+                          onSelected: (s) => setState(() {
+                            if (s) {
+                              if (!_authors.contains(author)) {
+                                _authors.add(author);
+                              }
+                            } else {
+                              _authors.remove(author);
+                            }
+                          }),
+                          selectedColor: Colors.black,
+                          labelStyle: TextStyle(
+                            color: selected ? Colors.white : Colors.black87,
+                            fontWeight: selected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                          backgroundColor: Colors.grey[100],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          side: BorderSide.none,
+                          checkmarkColor: Colors.white,
+                        );
+                      })
+                      .toList(),
                 ),
                 const SizedBox(height: 32),
 
@@ -655,63 +742,82 @@ class _PostEditorPageState extends State<PostEditorPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    ..._tags.map((tag) => Chip(
-                          label: Text(tag,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontFamily: 'Source Han Serif CN',
-                                  fontWeight: FontWeight.normal)),
-                          deleteIcon: const Icon(Icons.close, size: 14),
-                          onDeleted: () => setState(() => _tags.remove(tag)),
-                          backgroundColor: Colors.grey[100],
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          side: BorderSide.none,
-                        )),
+                    ..._tags.map(
+                      (tag) => Chip(
+                        label: Text(
+                          tag,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontFamily: 'Source Han Serif CN',
+                            fontWeight: FontWeight.normal,
+                          ),
+                        ),
+                        deleteIcon: const Icon(Icons.close, size: 14),
+                        onDeleted: () => setState(() => _tags.remove(tag)),
+                        backgroundColor: Colors.grey[100],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide.none,
+                      ),
+                    ),
                     ActionChip(
                       label: const Icon(Icons.add, size: 16),
                       onPressed: _showAddTagDialog,
                       backgroundColor: Colors.white,
                       side: BorderSide(color: Colors.grey[300]!),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 32),
 
                 _label('Custom Properties'),
-                ..._customProps.entries.map((e) => Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(e.key,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13)),
-                          const Text(': ',
-                              style: TextStyle(color: Colors.grey)),
-                          Expanded(
-                            child: Text(e.value,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13)),
+                ..._customProps.entries.map(
+                  (e) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          e.key,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                          InkWell(
-                            onTap: () =>
-                                setState(() => _customProps.remove(e.key)),
-                            child: const Icon(Icons.close,
-                                size: 16, color: Colors.red),
+                        ),
+                        const Text(': ', style: TextStyle(color: Colors.grey)),
+                        Expanded(
+                          child: Text(
+                            e.value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13),
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                        InkWell(
+                          onTap: () =>
+                              setState(() => _customProps.remove(e.key)),
+                          child: const Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 TextButton.icon(
                   onPressed: _showAddPropertyDialog,
                   icon: const Icon(Icons.add, size: 16),
@@ -739,16 +845,17 @@ class _PostEditorPageState extends State<PostEditorPage> {
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Text(
-          text.toUpperCase(),
-          style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.0),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        color: Colors.grey,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.0,
+      ),
+    ),
+  );
 
   void _showAddTagDialog() {
     String tag = '';
@@ -767,8 +874,9 @@ class _PostEditorPageState extends State<PostEditorPage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               if (tag.isNotEmpty) setState(() => _tags.add(tag));
@@ -794,18 +902,23 @@ class _PostEditorPageState extends State<PostEditorPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-                controller: keyCtrl,
-                decoration:
-                    const InputDecoration(labelText: 'Key (e.g. abstract)')),
+              controller: keyCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Key (e.g. abstract)',
+              ),
+            ),
             const SizedBox(height: 12),
-            TextField(controller: valCtrl,
-                decoration: const InputDecoration(labelText: 'Value')),
+            TextField(
+              controller: valCtrl,
+              decoration: const InputDecoration(labelText: 'Value'),
+            ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () {
               final k = keyCtrl.text.trim();
@@ -814,8 +927,8 @@ class _PostEditorPageState extends State<PostEditorPage> {
                 if (reserved.contains(k.toLowerCase())) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content:
-                            Text('Use standard controls for core fields.')),
+                      content: Text('Use standard controls for core fields.'),
+                    ),
                   );
                 } else {
                   setState(() => _customProps[k] = v);

@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/config/app_config.dart';
+import '../../core/config/app_info.dart';
 import '../../core/config/version.dart';
 import '../../core/services/couple_config.dart';
 import '../../core/services/data_source_manager.dart';
 import '../../core/services/gitee_client.dart';
 import '../../core/services/github_client.dart';
-import '../../core/theme/theme_provider.dart';
+import '../../core/services/update_service.dart';
 import '../../core/theme/theme_config.dart';
+import '../../core/theme/theme_provider.dart';
 import '../onboarding/onboarding_page.dart';
+import '../update/update_dialog.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -33,6 +38,12 @@ class _SettingsPageState extends State<SettingsPage> {
   final _giteeBranchController = TextEditingController();
   bool _obscureGiteeToken = true;
 
+  // Updates
+  final UpdateService _updateService = UpdateService();
+  bool _checkingUpdate = false;
+  bool _autoCheckUpdates = true;
+  String? _updateStatus;
+
   // Sync status
   SyncStatus? _syncStatus;
   String? _syncGithubSha;
@@ -53,6 +64,10 @@ class _SettingsPageState extends State<SettingsPage> {
     _giteeUserController.text = GiteeClient.user;
     _giteeRepoController.text = GiteeClient.repo;
     _giteeBranchController.text = GiteeClient.branch;
+
+    _updateService.isAutoCheckEnabled().then((enabled) {
+      if (mounted) setState(() => _autoCheckUpdates = enabled);
+    });
   }
 
   @override
@@ -65,6 +80,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _giteeUserController.dispose();
     _giteeRepoController.dispose();
     _giteeBranchController.dispose();
+    _updateService.dispose();
     super.dispose();
   }
 
@@ -131,8 +147,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final subtitle = (p1.isNotEmpty && p2.isNotEmpty)
         ? '$p1  ·  $p2'
         : startDate != null
-            ? 'Since ${startDate.year}/${startDate.month.toString().padLeft(2, '0')}/${startDate.day.toString().padLeft(2, '0')}'
-            : 'Tap to set up your profile';
+        ? 'Since ${startDate.year}/${startDate.month.toString().padLeft(2, '0')}/${startDate.day.toString().padLeft(2, '0')}'
+        : 'Tap to set up your profile';
     return _buildCard(
       ListTile(
         leading: Icon(
@@ -177,13 +193,18 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildRepoCardContent(
             title: 'GitHub',
             subtitle: 'github.com repository',
-            icon: FaIcon(FontAwesomeIcons.github, size: 20, color: Theme.of(context).primaryColor),
+            icon: FaIcon(
+              FontAwesomeIcons.github,
+              size: 20,
+              color: Theme.of(context).primaryColor,
+            ),
             tokenController: _ghTokenController,
             userController: _ghUserController,
             repoController: _ghRepoController,
             branchController: _ghBranchController,
             obscureToken: _obscureGhToken,
-            onToggleObscure: () => setState(() => _obscureGhToken = !_obscureGhToken),
+            onToggleObscure: () =>
+                setState(() => _obscureGhToken = !_obscureGhToken),
             tokenHint: 'ghp_...',
             onSave: () async {
               final messenger = ScaffoldMessenger.of(context);
@@ -193,8 +214,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 repo: _ghRepoController.text.trim(),
                 branch: _ghBranchController.text.trim(),
               );
-              await DataSourceManager.instance.setPreference(DataSourceManager.instance.preference);
-              messenger.showSnackBar(const SnackBar(content: Text('GitHub config saved')));
+              await DataSourceManager.instance.setPreference(
+                DataSourceManager.instance.preference,
+              );
+              messenger.showSnackBar(
+                const SnackBar(content: Text('GitHub config saved')),
+              );
             },
             onClear: () async {
               final messenger = ScaffoldMessenger.of(context);
@@ -203,20 +228,23 @@ class _SettingsPageState extends State<SettingsPage> {
               _ghUserController.text = GitHubClient.user;
               _ghRepoController.text = GitHubClient.repo;
               _ghBranchController.text = GitHubClient.branch;
-              messenger.showSnackBar(const SnackBar(content: Text('GitHub config cleared')));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('GitHub config cleared')),
+              );
             },
           ),
           const Divider(height: 1),
           _buildRepoCardContent(
             title: 'Gitee',
             subtitle: 'gitee.com mirror repository',
-            icon: _GiteeIcon(size: 20, color: Theme.of(context).primaryColor),
+            icon: _GiteeIcon(color: Theme.of(context).primaryColor),
             tokenController: _giteeTokenController,
             userController: _giteeUserController,
             repoController: _giteeRepoController,
             branchController: _giteeBranchController,
             obscureToken: _obscureGiteeToken,
-            onToggleObscure: () => setState(() => _obscureGiteeToken = !_obscureGiteeToken),
+            onToggleObscure: () =>
+                setState(() => _obscureGiteeToken = !_obscureGiteeToken),
             tokenHint: 'your_gitee_token',
             onSave: () async {
               final messenger = ScaffoldMessenger.of(context);
@@ -228,8 +256,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     ? 'main'
                     : _giteeBranchController.text.trim(),
               );
-              await DataSourceManager.instance.setPreference(DataSourceManager.instance.preference);
-              messenger.showSnackBar(const SnackBar(content: Text('Gitee config saved')));
+              await DataSourceManager.instance.setPreference(
+                DataSourceManager.instance.preference,
+              );
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Gitee config saved')),
+              );
             },
             onClear: () async {
               final messenger = ScaffoldMessenger.of(context);
@@ -238,7 +270,9 @@ class _SettingsPageState extends State<SettingsPage> {
               _giteeUserController.clear();
               _giteeRepoController.clear();
               _giteeBranchController.text = 'main';
-              messenger.showSnackBar(const SnackBar(content: Text('Gitee config cleared')));
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Gitee config cleared')),
+              );
             },
           ),
           const Divider(height: 1),
@@ -249,10 +283,7 @@ class _SettingsPageState extends State<SettingsPage> {
               if (!GiteeClient.isConfigured) return const SizedBox.shrink();
               return Column(
                 mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Divider(height: 1),
-                  _buildSyncStatusContent(),
-                ],
+                children: [const Divider(height: 1), _buildSyncStatusContent()],
               );
             },
           ),
@@ -276,106 +307,123 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onClear,
   }) {
     return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                icon,
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w500)),
-                      Text(subtitle,
-                          style:
-                              const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: tokenController,
-              obscureText: obscureToken,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: InputDecoration(
-                labelText: 'Access Token',
-                hintText: tokenHint,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                      obscureToken ? Icons.visibility_off : Icons.visibility),
-                  onPressed: onToggleObscure,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              icon,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: userController,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                labelText: 'Username',
-                hintText: 'e.g. your_username',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: tokenController,
+            obscureText: obscureToken,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            decoration: InputDecoration(
+              labelText: 'Access Token',
+              hintText: tokenHint,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: repoController,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                labelText: 'Repository Name',
-                hintText: 'e.g. MyRepoName',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: branchController,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                labelText: 'Branch',
-                hintText: 'main',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: onClear,
-                  child: const Text('Clear',
-                      style: TextStyle(color: Colors.grey)),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  obscureToken ? Icons.visibility_off : Icons.visibility,
                 ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: onSave,
-                  child: const Text('Save'),
-                ),
-              ],
+                onPressed: onToggleObscure,
+              ),
             ),
-          ],
-        ),
-      );
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: userController,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              labelText: 'Username',
+              hintText: 'e.g. your_username',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: repoController,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              labelText: 'Repository Name',
+              hintText: 'e.g. MyRepoName',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: branchController,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              labelText: 'Branch',
+              hintText: 'main',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: onClear,
+                child: const Text(
+                  'Clear',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(onPressed: onSave, child: const Text('Save')),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSourceSelectorContent(BuildContext context) {
@@ -390,20 +438,28 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.swap_horiz,
-                      size: 20, color: Theme.of(context).primaryColor),
+                  Icon(
+                    Icons.swap_horiz,
+                    size: 20,
+                    color: Theme.of(context).primaryColor,
+                  ),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Active Source',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w500)),
+                      const Text(
+                        'Active Source',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       Text(
                         resolved.name,
                         style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).primaryColor),
+                          fontSize: 12,
+                          color: Theme.of(context).primaryColor,
+                        ),
                       ),
                     ],
                   ),
@@ -412,24 +468,28 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 16),
               Center(
                 child: SegmentedButton<DataSource>(
-                  segments: [
-                    const ButtonSegment(
-                        value: DataSource.github,
-                        label: Text('GitHub'),
-                        icon: FaIcon(FontAwesomeIcons.github, size: 14)),
-                    const ButtonSegment(
-                        value: DataSource.auto,
-                        label: Text('Auto'),
-                        icon: Icon(Icons.auto_awesome)),
+                  segments: const [
                     ButtonSegment(
-                        value: DataSource.gitee,
-                        label: const Text('Gitee'),
-                        icon: _GiteeIcon(size: 14)),
+                      value: DataSource.github,
+                      label: Text('GitHub'),
+                      icon: FaIcon(FontAwesomeIcons.github, size: 14),
+                    ),
+                    ButtonSegment(
+                      value: DataSource.auto,
+                      label: Text('Auto'),
+                      icon: Icon(Icons.auto_awesome),
+                    ),
+                    ButtonSegment(
+                      value: DataSource.gitee,
+                      label: Text('Gitee'),
+                      icon: _GiteeIcon(size: 14),
+                    ),
                   ],
                   selected: {pref},
                   onSelectionChanged: (selection) async {
-                    await DataSourceManager.instance
-                        .setPreference(selection.first);
+                    await DataSourceManager.instance.setPreference(
+                      selection.first,
+                    );
                     setState(() {});
                   },
                 ),
@@ -447,43 +507,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSyncStatusContent() {
-    final Color statusColor;
-    final IconData statusIcon;
-    final String statusLabel;
-
-    if (_syncChecking) {
-      statusColor = Colors.grey;
-      statusIcon = Icons.hourglass_top_outlined;
-      statusLabel = 'Checking…';
-    } else {
-      switch (_syncStatus) {
-        case SyncStatus.synced:
-          statusColor = Colors.green;
-          statusIcon = Icons.check_circle_outline;
-          statusLabel = 'In sync';
-        case SyncStatus.outOfSync:
-          statusColor = Colors.orange;
-          statusIcon = Icons.sync_problem_outlined;
-          statusLabel = 'Gitee pending sync';
-        case SyncStatus.unknown:
-          statusColor = Colors.red.shade400;
-          statusIcon = Icons.error_outline;
-          statusLabel = 'Check failed';
-        case null:
-          statusColor = Colors.grey;
-          statusIcon = Icons.help_outline;
-          statusLabel = 'Not checked';
-      }
-    }
-
-    final lastCheckedText = _syncLastChecked == null
-        ? null
-        : () {
-            final diff = DateTime.now().difference(_syncLastChecked!);
-            if (diff.inSeconds < 60) return 'Just now';
-            if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-            return '${diff.inHours}h ago';
-          }();
+    final (:color, :icon, :label) = _syncIndicator();
+    final lastChecked = _formatLastChecked(_syncLastChecked);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -492,97 +517,157 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.compare_arrows,
-                  size: 20, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Mirror Sync Status',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w500)),
-                      Text('GitHub → Gitee (writes always to GitHub)',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                _syncChecking
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.refresh, size: 20),
-                        tooltip: 'Check sync status',
-                        onPressed: _checkSyncStatus,
-                      ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(statusIcon, size: 18, color: statusColor),
-                const SizedBox(width: 8),
-                Text(statusLabel,
-                    style: TextStyle(
-                        color: statusColor, fontWeight: FontWeight.w500)),
-                if (lastCheckedText != null) ...[
-                  const Spacer(),
-                  Text(lastCheckedText,
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey)),
-                ],
-              ],
-            ),
-            if (_syncGithubSha != null || _syncGiteeSha != null) ...[
-              const SizedBox(height: 8),
-              DefaultTextStyle(
-                style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    color: Colors.grey),
-                child: Row(
+              Icon(
+                Icons.compare_arrows,
+                size: 20,
+                color: Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_syncGithubSha != null) ...[
-                      const Text('GitHub '),
-                      Text(_syncGithubSha!,
-                          style: const TextStyle(color: Colors.black87)),
-                    ],
-                    if (_syncGithubSha != null && _syncGiteeSha != null)
-                      const Text('  ·  '),
-                    if (_syncGiteeSha != null) ...[
-                      const Text('Gitee '),
-                      Text(
-                        _syncGiteeSha!,
-                        style: TextStyle(
-                            color: _syncStatus == SyncStatus.synced
-                                ? Colors.black87
-                                : Colors.orange),
+                    Text(
+                      'Mirror Sync Status',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
                       ),
-                    ],
+                    ),
+                    Text(
+                      'GitHub → Gitee (writes always to GitHub)',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
                   ],
                 ),
               ),
+              if (_syncChecking)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Check sync status',
+                  onPressed: _checkSyncStatus,
+                ),
             ],
-            if (_syncError != null && _syncStatus == SyncStatus.unknown) ...[
-              const SizedBox(height: 6),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
               Text(
-                _syncError!,
-                style: TextStyle(fontSize: 12, color: Colors.red.shade300),
+                label,
+                style: TextStyle(color: color, fontWeight: FontWeight.w500),
               ),
+              if (lastChecked != null) ...[
+                const Spacer(),
+                Text(
+                  lastChecked,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ],
-            if (_syncStatus == SyncStatus.outOfSync) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Gitee will catch up automatically. You can also trigger a manual sync from the Gitee web console.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
+          ),
+          if (_syncGithubSha != null || _syncGiteeSha != null) ...[
+            const SizedBox(height: 8),
+            _buildShaRow(),
           ],
-        ),
+          if (_syncError != null && _syncStatus == SyncStatus.unknown) ...[
+            const SizedBox(height: 6),
+            Text(
+              _syncError!,
+              style: TextStyle(fontSize: 12, color: Colors.red.shade300),
+            ),
+          ],
+          if (_syncStatus == SyncStatus.outOfSync) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Gitee will catch up automatically. You can also trigger a manual sync from the Gitee web console.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  ({Color color, IconData icon, String label}) _syncIndicator() {
+    if (_syncChecking) {
+      return (
+        color: Colors.grey,
+        icon: Icons.hourglass_top_outlined,
+        label: 'Checking…',
       );
+    }
+    return switch (_syncStatus) {
+      SyncStatus.synced => (
+        color: Colors.green,
+        icon: Icons.check_circle_outline,
+        label: 'In sync',
+      ),
+      SyncStatus.outOfSync => (
+        color: Colors.orange,
+        icon: Icons.sync_problem_outlined,
+        label: 'Gitee pending sync',
+      ),
+      SyncStatus.unknown => (
+        color: Colors.red.shade400,
+        icon: Icons.error_outline,
+        label: 'Check failed',
+      ),
+      null => (
+        color: Colors.grey,
+        icon: Icons.help_outline,
+        label: 'Not checked',
+      ),
+    };
+  }
+
+  Widget _buildShaRow() {
+    return DefaultTextStyle(
+      style: const TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: Colors.grey,
+      ),
+      child: Row(
+        children: [
+          if (_syncGithubSha != null) ...[
+            const Text('GitHub '),
+            Text(
+              _syncGithubSha!,
+              style: const TextStyle(color: Colors.black87),
+            ),
+          ],
+          if (_syncGithubSha != null && _syncGiteeSha != null)
+            const Text('  ·  '),
+          if (_syncGiteeSha != null) ...[
+            const Text('Gitee '),
+            Text(
+              _syncGiteeSha!,
+              style: TextStyle(
+                color: _syncStatus == SyncStatus.synced
+                    ? Colors.black87
+                    : Colors.orange,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String? _formatLastChecked(DateTime? at) {
+    if (at == null) return null;
+    final diff = DateTime.now().difference(at);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    return '${diff.inHours}h ago';
   }
 
   Widget _buildThemeSection(BuildContext context) {
@@ -795,58 +880,153 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildAboutSection(BuildContext context) {
+    final primary = Theme.of(context).primaryColor;
     return _buildCard(
-      ListTile(
-        leading: Icon(
-          Icons.info_outline,
-          color: Theme.of(context).primaryColor,
-        ),
-        title: const Text('Version'),
-        subtitle: const Text(AppVersion.currentVersion),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => _showChangelog(context),
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.asset('assets/icon/icon.png', width: 36, height: 36),
+            ),
+            title: const Text('QingSpace'),
+            subtitle: Text(
+              'v${AppInfo.version}  ·  build ${AppInfo.buildNumber}',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showChangelog(context),
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          ListTile(
+            leading: _checkingUpdate
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Padding(
+                      padding: EdgeInsets.all(2),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : Icon(Icons.system_update_rounded, color: primary),
+            title: const Text('检查更新'),
+            subtitle: Text(_updateStatus ?? '从 GitHub Releases 获取最新版本'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _checkingUpdate ? null : _checkForUpdate,
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          SwitchListTile(
+            secondary: Icon(Icons.update, color: primary),
+            title: const Text('启动时自动检查'),
+            subtitle: const Text('每天至多检查一次'),
+            value: _autoCheckUpdates,
+            activeTrackColor: primary,
+            onChanged: (value) {
+              setState(() => _autoCheckUpdates = value);
+              _updateService.setAutoCheckEnabled(value);
+            },
+          ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          ListTile(
+            leading: FaIcon(FontAwesomeIcons.github, size: 20, color: primary),
+            title: const Text('开源仓库'),
+            subtitle: const Text('${AppInfo.owner}/${AppInfo.repo}'),
+            trailing: const Icon(Icons.open_in_new, size: 18),
+            onTap: () => launchUrl(
+              Uri.parse(AppInfo.repoUrl),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Future<void> _checkForUpdate() async {
+    setState(() {
+      _checkingUpdate = true;
+      _updateStatus = null;
+    });
+
+    final result = await _updateService.check();
+    if (!mounted) return;
+    setState(() => _checkingUpdate = false);
+
+    switch (result.outcome) {
+      case UpdateOutcome.available:
+        setState(() => _updateStatus = '发现新版本 ${result.release!.version}');
+        // A manual check should surface the release even when the user skipped
+        // it earlier, so the skip action is hidden here.
+        await showUpdateDialog(
+          context,
+          release: result.release!,
+          service: _updateService,
+          allowSkip: false,
+        );
+      case UpdateOutcome.upToDate:
+      case UpdateOutcome.skipped:
+        setState(() => _updateStatus = '已是最新版本');
+      case UpdateOutcome.failed:
+        setState(() => _updateStatus = '检查失败：${result.error}');
+    }
+  }
+
   void _showChangelog(BuildContext context) {
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Changelog'),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400, maxHeight: 500),
-            child: SizedBox(
-              width: double.maxFinite,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: AppVersion.changelog.length,
-                itemBuilder: (context, index) {
-                  final change = AppVersion.changelog[index];
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      'v${change['version']} (${change['date']})',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+      builder: (context) => AlertDialog(
+        title: const Text('更新日志'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420, maxHeight: 500),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: AppVersion.changelog.length,
+              separatorBuilder: (_, _) => const Divider(height: 24),
+              itemBuilder: (context, index) {
+                final entry = AppVersion.changelog[index];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'v${entry.version}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          entry.date,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
                     ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(change['changes'] ?? ''),
-                    ),
-                  );
-                },
-              ),
+                    const SizedBox(height: 6),
+                    for (final change in entry.changes)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          '· $change',
+                          style: const TextStyle(fontSize: 13, height: 1.5),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -866,9 +1046,7 @@ class _GiteeIcon extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _GiteePainter(
-          color: color ?? Theme.of(context).primaryColor,
-        ),
+        painter: _GiteePainter(color: color ?? Theme.of(context).primaryColor),
       ),
     );
   }
@@ -894,24 +1072,30 @@ class _GiteePainter extends CustomPainter {
 
     // Outer bracket block (top bar + left column + bottom bar)
     final outer = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(4.76 * s, 5.33 * s, 13.32 * s, 13.59 * s),
-        Radius.circular(0.6 * s),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(4.76 * s, 5.33 * s, 13.32 * s, 13.59 * s),
+          Radius.circular(0.6 * s),
+        ),
+      );
 
     // Hollow interior (punched out to create the G opening)
     final hollow = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(7.0 * s, 7.6 * s, 11.0 * s, 9.3 * s),
-        Radius.circular(0.4 * s),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(7.0 * s, 7.6 * s, 11.0 * s, 9.3 * s),
+          Radius.circular(0.4 * s),
+        ),
+      );
 
     // Crossbar (inner arm of the G)
     final arm = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(12.0 * s, 11.0 * s, 6.0 * s, 2.3 * s),
-        Radius.circular(0.4 * s),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(12.0 * s, 11.0 * s, 6.0 * s, 2.3 * s),
+          Radius.circular(0.4 * s),
+        ),
+      );
 
     // bracket = outer − hollow, then ∪ arm
     final bracket = Path.combine(PathOperation.difference, outer, hollow);

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:qing_space/core/services/countdown_service.dart';
-import 'package:qing_space/core/config/app_config.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/services/countdown_service.dart';
 
+const String _kSerif = 'Source Han Serif CN';
+
+/// Shows the next anniversary — as a countdown normally, or as a celebration
+/// banner when it falls today — plus a one-line peek at the one after it.
 class CountdownCard extends StatefulWidget {
   const CountdownCard({super.key});
 
@@ -12,170 +16,135 @@ class CountdownCard extends StatefulWidget {
 }
 
 class _CountdownCardState extends State<CountdownCard> {
-  late List<AnniversaryEvent> _events;
-  late AnniversaryEvent _primaryEvent;
-  AnniversaryEvent? _secondaryEvent;
+  static const _service = CountdownService();
+
+  List<AnniversaryEvent> _events = const [];
+
+  AnniversaryEvent? get _primary => _events.firstOrNull;
+  AnniversaryEvent? get _secondary => _events.length > 1 ? _events[1] : null;
 
   @override
   void initState() {
     super.initState();
-    _refreshEvents();
-    AppConfig.debugDateNotifier.addListener(_refreshEventsState);
-    AppConfig.debugModeNotifier.addListener(_refreshEventsState);
+    _events = _service.getUpcomingEvents();
+    AppConfig.debugDateNotifier.addListener(_refresh);
+    AppConfig.debugModeNotifier.addListener(_refresh);
   }
 
   @override
   void dispose() {
-    AppConfig.debugDateNotifier.removeListener(_refreshEventsState);
-    AppConfig.debugModeNotifier.removeListener(_refreshEventsState);
+    AppConfig.debugDateNotifier.removeListener(_refresh);
+    AppConfig.debugModeNotifier.removeListener(_refresh);
     super.dispose();
   }
 
-  void _refreshEventsState() {
-    setState(() {
-      _refreshEvents();
-    });
-  }
-
-  void _refreshEvents() {
-    _events = CountdownService().getUpcomingEvents();
-    if (_events.isNotEmpty) {
-      _primaryEvent = _events.first;
-      if (_events.length > 1) {
-        _secondaryEvent = _events[1];
-      } else {
-        _secondaryEvent = null;
-      }
-    }
-  }
+  void _refresh() => setState(() => _events = _service.getUpcomingEvents());
 
   @override
   Widget build(BuildContext context) {
-    if (_events.isEmpty) return const SizedBox.shrink();
+    final primary = _primary;
+    if (primary == null) return const SizedBox.shrink();
 
-    // Responsive: On desktop, limit the max width
+    final isToday = primary.isToday;
+    final secondary = _secondary;
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 800),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              // Primary Event Card
-              _buildPrimaryCard(),
-            ],
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFB7B2).withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              gradient: isToday
+                  ? const LinearGradient(
+                      colors: [Color(0xFFFF9A9E), Color(0xFFFECFEF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+            ),
+            child: Column(
+              children: [
+                if (isToday)
+                  _CelebrationContent(event: primary)
+                else
+                  _CountdownContent(event: primary),
+                if (secondary != null) ...[
+                  const SizedBox(height: 16),
+                  _NextUpChip(
+                    event: secondary,
+                    onGradient: isToday,
+                  ).animate().fadeIn(delay: 400.ms),
+                ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildPrimaryCard() {
-    final isToday = _primaryEvent.isToday;
+extension on AnniversaryKind {
+  IconData get filledIcon => switch (this) {
+    AnniversaryKind.birthday => Icons.cake_rounded,
+    AnniversaryKind.valentines ||
+    AnniversaryKind.qixi => Icons.favorite_rounded,
+    AnniversaryKind.hundredDay ||
+    AnniversaryKind.yearly => Icons.card_giftcard_rounded,
+  };
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFB7B2).withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-        gradient: isToday
-            ? const LinearGradient(
-                colors: [Color(0xFFFF9A9E), Color(0xFFFECFEF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : null,
-      ),
-      child: Column(
-        children: [
-          isToday ? _buildCelebrationContent() : _buildCountdownContent(),
-          if (_secondaryEvent != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isToday
-                    ? Colors.white.withValues(alpha: 0.2)
-                    : Colors.grey[50],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.next_week, // Changed from event_upcoming
-                    size: 14,
-                    color: isToday ? Colors.white : Colors.grey[400],
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Next: ${_secondaryEvent!.title} in ${_secondaryEvent!.daysUntil} days",
-                    style: GoogleFonts.sourceSans3(
-                      color: isToday ? Colors.white : Colors.grey[600],
-                      fontSize: 12,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(delay: 400.ms),
-          ],
-        ],
-      ),
-    );
-  }
+  IconData get outlinedIcon => switch (this) {
+    AnniversaryKind.birthday => Icons.cake_outlined,
+    AnniversaryKind.valentines || AnniversaryKind.qixi => Icons.favorite_border,
+    AnniversaryKind.hundredDay ||
+    AnniversaryKind.yearly => Icons.event_available,
+  };
 
-  Widget _buildCelebrationContent() {
-    IconData icon;
-    // Check if birthday
-    if (_primaryEvent.title.contains("Birthday")) {
-      icon = Icons.cake_rounded;
-    } else if (_primaryEvent.title.contains("Valentine") ||
-        _primaryEvent.title.contains("七夕")) {
-      // Updated for Chinese
-      icon = Icons.favorite_rounded;
-    } else if (_primaryEvent.title.contains("Anniversary")) {
-      icon = Icons.card_giftcard_rounded;
-    } else {
-      icon = Icons.celebration_rounded;
-    }
+  String get greeting => switch (this) {
+    AnniversaryKind.birthday => 'Happy Birthday to You!',
+    AnniversaryKind.valentines => "Happy Valentine's Day!",
+    AnniversaryKind.qixi => 'Happy Qixi Festival!',
+    AnniversaryKind.hundredDay || AnniversaryKind.yearly => 'Today is',
+  };
+}
 
-    // Customize text for birthday
-    String celebrationText = "Today is";
-    if (_primaryEvent.title.contains("Birthday")) {
-      celebrationText = "Happy Birthday to You!";
-    } else if (_primaryEvent.title.contains("七夕")) {
-      celebrationText = "Happy Qixi Festival!";
-    } else if (_primaryEvent.title.contains("Valentine")) {
-      celebrationText = "Happy Valentine's Day!";
-    }
+class _CelebrationContent extends StatelessWidget {
+  final AnniversaryEvent event;
 
+  const _CelebrationContent({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, size: 48, color: Colors.white),
+        Icon(event.kind.filledIcon, size: 48, color: Colors.white),
         const SizedBox(height: 16),
         Text(
-          celebrationText,
+          event.kind.greeting,
           style: const TextStyle(
-            fontFamily: 'Source Han Serif CN',
-            color: Colors.white, // Increased contrast
+            fontFamily: _kSerif,
+            color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          _primaryEvent.title,
+          event.title,
           style: const TextStyle(
-            fontFamily: 'Source Han Serif CN',
+            fontFamily: _kSerif,
             color: Colors.white,
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -183,9 +152,9 @@ class _CountdownCardState extends State<CountdownCard> {
         ),
         const SizedBox(height: 8),
         Text(
-          _primaryEvent.description,
+          event.description,
           style: const TextStyle(
-            fontFamily: 'Source Han Serif CN',
+            fontFamily: _kSerif,
             color: Colors.white,
             fontSize: 16,
           ),
@@ -193,35 +162,25 @@ class _CountdownCardState extends State<CountdownCard> {
       ],
     ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack);
   }
+}
 
-  Widget _buildCountdownContent() {
-    IconData icon;
-    // Determine icon based on event type
-    if (_primaryEvent.title.contains("WQT's Birthday")) {
-      // Updated from "Birthday"
-      icon = Icons.cake_outlined;
-    } else if (_primaryEvent.title.contains("LQL's Birthday")) {
-      icon = Icons.cake_outlined;
-    } else if (_primaryEvent.title.contains("Valentine") ||
-        _primaryEvent.title.contains("七夕")) {
-      // Updated for Chinese
-      icon = Icons.favorite_border;
-    } else if (_primaryEvent.title.contains("Anniversary")) {
-      icon = Icons.event_available;
-    } else {
-      icon = Icons.event;
-    }
+class _CountdownContent extends StatelessWidget {
+  final AnniversaryEvent event;
+
+  const _CountdownContent({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).primaryColor;
+    final tint = primary.withValues(alpha: 0.05);
 
     return Row(
       children: [
         Container(
           width: 50,
           height: 50,
-          decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: Theme.of(context).primaryColor, size: 24),
+          decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+          child: Icon(event.kind.outlinedIcon, color: primary, size: 24),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -229,9 +188,9 @@ class _CountdownCardState extends State<CountdownCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "UPCOMING",
+                'UPCOMING',
                 style: TextStyle(
-                  fontFamily: 'Source Han Serif CN',
+                  fontFamily: _kSerif,
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey[400],
@@ -240,9 +199,9 @@ class _CountdownCardState extends State<CountdownCard> {
               ),
               const SizedBox(height: 4),
               Text(
-                _primaryEvent.title,
+                event.title,
                 style: TextStyle(
-                  fontFamily: 'Source Han Serif CN',
+                  fontFamily: _kSerif,
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
@@ -250,12 +209,10 @@ class _CountdownCardState extends State<CountdownCard> {
               ),
               const SizedBox(height: 4),
               Text(
-                _primaryEvent.description, // Date string
+                event.description,
                 style: TextStyle(
-                  fontFamily: 'Source Han Serif CN',
-                  color: Theme.of(
-                    context,
-                  ).primaryColor.withValues(alpha: 0.8), // Updated deprecation
+                  fontFamily: _kSerif,
+                  color: primary.withValues(alpha: 0.8),
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -266,33 +223,78 @@ class _CountdownCardState extends State<CountdownCard> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.05),
+            color: tint,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             children: [
               Text(
-                "${_primaryEvent.daysUntil}",
+                '${event.daysUntil}',
                 style: TextStyle(
-                  fontFamily: 'Source Han Serif CN',
+                  fontFamily: _kSerif,
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
+                  color: primary,
                   height: 1,
                 ),
               ),
               Text(
-                "Days",
+                'Days',
                 style: TextStyle(
-                  fontFamily: 'Source Han Serif CN',
+                  fontFamily: _kSerif,
                   fontSize: 10,
-                  color: Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                  color: primary.withValues(alpha: 0.8),
                 ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _NextUpChip extends StatelessWidget {
+  final AnniversaryEvent event;
+
+  /// True when the chip sits on the celebration gradient rather than on white.
+  final bool onGradient;
+
+  const _NextUpChip({required this.event, required this.onGradient});
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = onGradient ? Colors.white : Colors.grey[600];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: onGradient
+            ? Colors.white.withValues(alpha: 0.2)
+            : Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.next_week,
+            size: 14,
+            color: onGradient ? Colors.white : Colors.grey[400],
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Next: ${event.title} in ${event.daysUntil} days',
+              style: GoogleFonts.sourceSans3(
+                color: foreground,
+                fontSize: 12,
+                letterSpacing: 0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

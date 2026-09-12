@@ -62,7 +62,8 @@ python tool/generate_icon.py     # needs Pillow
 dart run flutter_launcher_icons  # fans the masters out to every platform
 ```
 
-Commit both `assets/icon/` and the regenerated platform files. Don't hand-edit
+Commit both `assets/icon/` and the regenerated platform files. CI verifies the
+committed masters against the generator (`tool/verify_icon.py`). Do not hand-edit
 the PNGs or `icon.svg`; they are build products and CI will notice.
 
 ## Commit messages

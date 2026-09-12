@@ -157,31 +157,52 @@ def write_png(img: Image.Image, name: str) -> None:
     print(f'  {name:24} {img.size[0]}x{img.size[1]}  {img.mode}')
 
 
-def main() -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
-    big = SIZE * SSAA
-    print(f'Rendering at {big}x{big}, downsampling to {SIZE}…')
+def build_images() -> dict[str, Image.Image]:
+    """Renders every bitmap master, keyed by output filename.
 
+    Kept separate from file writing so tool/verify_icon.py can rebuild them in
+    memory and diff against what is committed.
+    """
+    big = SIZE * SSAA
     gradient = build_gradient(SIZE)
+    white = Image.new('RGB', (SIZE, SIZE), MARK_COLOR)
 
     # Full-bleed icon: iOS, macOS, Windows, web, Android legacy.
     mask = build_mark_mask(big, 1.0).resize((SIZE, SIZE), Image.LANCZOS)
     icon = gradient.copy()
-    icon.paste(Image.new('RGB', (SIZE, SIZE), MARK_COLOR), (0, 0), mask)
-    write_png(icon, 'icon.png')
+    icon.paste(white, (0, 0), mask)
 
     # Android adaptive layers.
-    write_png(gradient, 'icon_background.png')
-    fg_mask = build_mark_mask(big, FOREGROUND_SCALE).resize((SIZE, SIZE), Image.LANCZOS)
+    fg_mask = build_mark_mask(big, FOREGROUND_SCALE).resize(
+        (SIZE, SIZE), Image.LANCZOS
+    )
     foreground = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-    foreground.paste(Image.new('RGB', (SIZE, SIZE), MARK_COLOR), (0, 0), fg_mask)
-    write_png(foreground, 'icon_foreground.png')
+    foreground.paste(white, (0, 0), fg_mask)
 
-    write_svg()
+    return {
+        'icon.png': icon,
+        'icon_background.png': gradient,
+        'icon_foreground.png': foreground,
+    }
+
+
+def main() -> None:
+    os.makedirs(OUT_DIR, exist_ok=True)
+    print(f'Rendering at {SIZE * SSAA}x{SIZE * SSAA}, downsampling to {SIZE}…')
+
+    for name, image in build_images().items():
+        write_png(image, name)
+
+    path = os.path.join(OUT_DIR, 'icon.svg')
+    # Explicit LF: .gitattributes normalises to LF on commit, so writing CRLF
+    # here would make the file look dirty on Windows after every run.
+    with open(path, 'w', encoding='utf-8', newline='\n') as handle:
+        handle.write(build_svg())
+    print(f'  {"icon.svg":24} vector master')
     print('Done.')
 
 
-def write_svg() -> None:
+def build_svg() -> str:
     """Vector master, generated from the same constants as the bitmaps."""
     cx = cy = SIZE / 2.0
     left, right = cx - RING_OFFSET, cx + RING_OFFSET
@@ -227,10 +248,7 @@ def write_svg() -> None:
   <rect width="{SIZE}" height="{SIZE}" fill="#FFFFFF" mask="url(#mark)"/>
 </svg>
 '''
-    path = os.path.join(OUT_DIR, 'icon.svg')
-    with open(path, 'w', encoding='utf-8') as handle:
-        handle.write(svg)
-    print(f'  {"icon.svg":24} vector master')
+    return svg
 
 
 if __name__ == '__main__':

@@ -37,15 +37,13 @@ jobs:
       - name: Test
         run: flutter test
 
+      # Compares pixels rather than file bytes: PNG encoders differ across
+      # Pillow versions and platforms, so a byte diff would fail on a toolchain
+      # bump while the artwork is unchanged.
       - name: Check the committed icons match tool/generate_icon.py
         run: |
           python -m pip install --quiet Pillow
-          python tool/generate_icon.py
-          if ! git diff --quiet -- assets/icon; then
-            echo "::error::assets/icon is out of date. Run 'python tool/generate_icon.py' and commit the result."
-            git diff --stat -- assets/icon
-            exit 1
-          fi
+          python tool/verify_icon.py
 
   build:
     name: Build ${{ matrix.target }}

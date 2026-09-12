@@ -323,7 +323,10 @@ class _MomentsPageState extends State<MomentsPage> {
     return CustomScrollView(
       key: _scrollViewKey,
       controller: _scrollController,
-      cacheExtent: 500,
+      // Left at the framework default: CustomScrollView.cacheExtent was
+      // deprecated in Flutter 3.41 in favour of scrollCacheExtent, and the
+      // tuning is not worth a version-dependent API. Tiles are cheap to build
+      // now that _MomentTile is its own widget and images decode downscaled.
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),

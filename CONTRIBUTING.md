@@ -28,6 +28,10 @@ CI runs exactly these three, plus a check that `assets/icon/` matches what
 imports, unused locals, unused elements and dead code to **errors** — that is
 deliberate, please don't downgrade them to get a branch green.
 
+**CI tracks the latest stable Flutter**, and analyzes with `--fatal-infos`. A
+local toolchain that has fallen behind will miss deprecations that fail the
+build; run `flutter upgrade` if CI flags something you cannot reproduce.
+
 ## Things worth knowing
 
 - **Never write through a caller-supplied blob SHA.** Reads may come from the

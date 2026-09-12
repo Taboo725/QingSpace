@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+5  # single source of truth; read at runtime via AppInfo
+version: 1.1.1+6  # single source of truth; read at runtime via AppInfo
 
 environment:
   sdk: ^3.10.7
@@ -98,9 +98,9 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
-  # Only the weights the UI actually asks for are bundled. Each CJK weight is
-  # ~10 MB, so shipping unused ones is pure download cost: ExtraLight (200) and
-  # Light (300) were dropped because nothing requests them.
+  # Only the weights the UI actually asks for are bundled, and each is subset
+  # to GB2312 + the app's own strings by tool/subset_fonts.py — the full CN
+  # weights are ~10.7 MB each and were half the download.
   fonts:
     - family: Source Han Serif CN
       fonts:
